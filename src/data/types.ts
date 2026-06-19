@@ -19,6 +19,16 @@ export type RenderStatus =
   | "render_error"
   | "missing_url";
 
+export interface SolarImageRenderWitness {
+  status: RenderStatus;
+  naturalWidth: number | null;
+  naturalHeight: number | null;
+  clientWidth: number | null;
+  clientHeight: number | null;
+  observedAt: string | null;
+  error?: string | null;
+}
+
 export type EventType =
   | "FLR"
   | "CME"

@@ -166,6 +166,42 @@ button:disabled {
   gap: 8px;
 }
 
+.render-status-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.image-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.text-button {
+  border: 1px solid #35506f;
+  border-radius: 8px;
+  background: #101a2b;
+  color: #dff6ff;
+  font-size: 0.78rem;
+  line-height: 1;
+  padding: 8px 10px;
+}
+
+.text-button:hover {
+  border-color: #62d4ff;
+  background: #172a45;
+}
+
+.copy-status {
+  color: #9fb3c8;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+}
+
 .source-badge--live,
 .source-badge--rendered,
 .packet-status--resolved {
@@ -205,6 +241,32 @@ button:disabled {
 
 .solar-image-frame {
   margin: 0;
+}
+
+.render-witness-message {
+  margin: 0 0 12px;
+  border: 1px solid #273449;
+  border-radius: 8px;
+  background: #0f1a2b;
+  color: #cbd5e1;
+  font-size: 0.84rem;
+  padding: 10px 12px;
+}
+
+.render-witness-message--rendered {
+  border-color: rgba(52, 211, 153, 0.48);
+  color: #9ff6d0;
+}
+
+.render-witness-message--render_error,
+.render-witness-message--missing_url {
+  border-color: rgba(248, 113, 113, 0.5);
+  color: #fecaca;
+}
+
+.render-witness-message--loading {
+  border-color: rgba(250, 204, 21, 0.5);
+  color: #fde68a;
 }
 
 .solar-image-frame img {

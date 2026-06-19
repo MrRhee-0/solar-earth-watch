@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { SolarImageWitness } from "../data/types";
 import { SolarImagePanel } from "./SolarImagePanel";
@@ -17,8 +17,35 @@ const imageWitness: SolarImageWitness = {
   source: "HELIOVIEWER"
 };
 
+function setImageDimensions(
+  image: HTMLElement,
+  dimensions: {
+    naturalWidth: number;
+    naturalHeight: number;
+    clientWidth?: number;
+    clientHeight?: number;
+  }
+) {
+  Object.defineProperty(image, "naturalWidth", {
+    configurable: true,
+    value: dimensions.naturalWidth
+  });
+  Object.defineProperty(image, "naturalHeight", {
+    configurable: true,
+    value: dimensions.naturalHeight
+  });
+  Object.defineProperty(image, "clientWidth", {
+    configurable: true,
+    value: dimensions.clientWidth ?? dimensions.naturalWidth
+  });
+  Object.defineProperty(image, "clientHeight", {
+    configurable: true,
+    value: dimensions.clientHeight ?? dimensions.naturalHeight
+  });
+}
+
 describe("SolarImagePanel", () => {
-  it("shows unavailable witness when imageUrl is null", () => {
+  it("shows missing_url and unavailable witness when imageUrl is null", async () => {
     const onRenderStatusChange = vi.fn();
 
     render(
@@ -30,14 +57,93 @@ describe("SolarImagePanel", () => {
 
     expect(screen.getByText("unavailable witness")).toBeInTheDocument();
     expect(
-      screen.getByText("Solar image witness has no renderable image URL.")
-    ).toBeInTheDocument();
+      screen.getAllByText("Solar image witness has no renderable image URL.")
+        .length
+    ).toBeGreaterThan(0);
     expect(
       screen.getByText(/failure classification: unavailable_witness/i)
     ).toBeInTheDocument();
+    await waitFor(() =>
+      expect(onRenderStatusChange).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          status: "missing_url",
+          naturalWidth: null,
+          naturalHeight: null
+        })
+      )
+    );
   });
 
-  it("updates render status to render_error when the browser image fails", () => {
+  it("emits rendered witness when onLoad reports nonzero natural dimensions", () => {
+    const onRenderStatusChange = vi.fn();
+
+    render(
+      <SolarImagePanel
+        witness={imageWitness}
+        onRenderStatusChange={onRenderStatusChange}
+      />
+    );
+
+    const image = screen.getByAltText("Recent Sun image witness");
+    setImageDimensions(image, {
+      naturalWidth: 1024,
+      naturalHeight: 1024,
+      clientWidth: 384,
+      clientHeight: 384
+    });
+
+    fireEvent.load(image);
+
+    expect(onRenderStatusChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        status: "rendered",
+        naturalWidth: 1024,
+        naturalHeight: 1024,
+        clientWidth: 384,
+        clientHeight: 384,
+        error: null
+      })
+    );
+    expect(screen.getByText("BROWSER RENDER: rendered")).toBeInTheDocument();
+    expect(
+      screen.getByText("Solar image render witness preserved.")
+    ).toBeInTheDocument();
+  });
+
+  it("emits render_error when onLoad reports zero natural dimensions", () => {
+    const onRenderStatusChange = vi.fn();
+
+    render(
+      <SolarImagePanel
+        witness={imageWitness}
+        onRenderStatusChange={onRenderStatusChange}
+      />
+    );
+
+    const image = screen.getByAltText("Recent Sun image witness");
+    setImageDimensions(image, {
+      naturalWidth: 0,
+      naturalHeight: 1024,
+      clientWidth: 384,
+      clientHeight: 384
+    });
+
+    fireEvent.load(image);
+
+    expect(onRenderStatusChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        status: "render_error",
+        naturalWidth: 0,
+        naturalHeight: 1024,
+        error: "Solar image loaded with zero natural dimensions."
+      })
+    );
+    expect(
+      screen.getAllByText("Solar image URL failed browser render.").length
+    ).toBeGreaterThan(0);
+  });
+
+  it("emits render_error when the browser image fails", () => {
     const onRenderStatusChange = vi.fn();
 
     render(
@@ -49,26 +155,17 @@ describe("SolarImagePanel", () => {
 
     fireEvent.error(screen.getByAltText("Recent Sun image witness"));
 
-    expect(onRenderStatusChange).toHaveBeenLastCalledWith("render_error");
-    expect(
-      screen.getByText("Solar image URL failed browser render.")
-    ).toBeInTheDocument();
-    expect(screen.getByText(imageWitness.imageUrl ?? "")).toBeInTheDocument();
-  });
-
-  it("updates render status to rendered when the browser image loads", () => {
-    const onRenderStatusChange = vi.fn();
-
-    render(
-      <SolarImagePanel
-        witness={imageWitness}
-        onRenderStatusChange={onRenderStatusChange}
-      />
+    expect(onRenderStatusChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        status: "render_error",
+        naturalWidth: null,
+        naturalHeight: null,
+        error: "Solar image URL failed browser render."
+      })
     );
-
-    fireEvent.load(screen.getByAltText("Recent Sun image witness"));
-
-    expect(onRenderStatusChange).toHaveBeenLastCalledWith("rendered");
-    expect(screen.getByText("IMAGE RENDER: rendered")).toBeInTheDocument();
+    expect(
+      screen.getAllByText("Solar image URL failed browser render.").length
+    ).toBeGreaterThan(0);
+    expect(screen.getByText(imageWitness.imageUrl ?? "")).toBeInTheDocument();
   });
 });

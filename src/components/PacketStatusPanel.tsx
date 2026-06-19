@@ -6,6 +6,17 @@ export interface SourceDiagnostics {
   helioviewerImageFetchStatus: SourceStatus;
   helioviewerRenderStatus: RenderStatus;
   imageUrl: string | null;
+  proxiedImageUrl: string | null;
+  remoteHelioviewerEndpointPath: string | null;
+  imageUrlBeginsWithApiHelioviewer: boolean;
+  displayTruePresent: boolean;
+  layersContainSdoAia171: boolean;
+  naturalWidth: number | null;
+  naturalHeight: number | null;
+  clientWidth: number | null;
+  clientHeight: number | null;
+  renderObservedAt: string | null;
+  renderError: string | null;
   donkiStatus: SourceStatus;
   plasmaStatus: SourceStatus;
   magStatus: SourceStatus;
@@ -31,6 +42,26 @@ function diagnosticRows(diagnostics: SourceDiagnostics) {
     ["Helioviewer image URL status", diagnostics.helioviewerImageFetchStatus],
     ["Helioviewer render status", diagnostics.helioviewerRenderStatus],
     ["imageUrl", diagnostics.imageUrl ?? "missing_url"],
+    ["Proxied image URL", diagnostics.proxiedImageUrl ?? "missing_url"],
+    [
+      "Remote Helioviewer endpoint path",
+      diagnostics.remoteHelioviewerEndpointPath ?? "unavailable"
+    ],
+    [
+      "image URL begins with /api/helioviewer",
+      String(diagnostics.imageUrlBeginsWithApiHelioviewer)
+    ],
+    ["display=true present", String(diagnostics.displayTruePresent)],
+    [
+      "layers contains SDO,AIA,AIA,171",
+      String(diagnostics.layersContainSdoAia171)
+    ],
+    ["naturalWidth", diagnostics.naturalWidth?.toString() ?? "unobserved"],
+    ["naturalHeight", diagnostics.naturalHeight?.toString() ?? "unobserved"],
+    ["clientWidth", diagnostics.clientWidth?.toString() ?? "unobserved"],
+    ["clientHeight", diagnostics.clientHeight?.toString() ?? "unobserved"],
+    ["render observed at", diagnostics.renderObservedAt ?? "unobserved"],
+    ["render error", diagnostics.renderError ?? "none"],
     ["DONKI status", diagnostics.donkiStatus],
     ["SWPC plasma status", diagnostics.plasmaStatus],
     ["SWPC mag status", diagnostics.magStatus],

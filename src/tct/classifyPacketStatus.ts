@@ -4,6 +4,7 @@ import type {
   MagPoint,
   PlasmaPoint,
   RenderStatus,
+  SolarImageRenderWitness,
   SolarImageWitness,
   SourceStatus,
   WitnessSource
@@ -49,7 +50,7 @@ export interface ClassifyPacketInputs {
   sourceErrors?: Partial<Record<WitnessSource, string | undefined>>;
   eventCandidates?: EventWitness[];
   selectedEventIsExplicit?: boolean;
-  solarImageRenderStatus?: RenderStatus;
+  solarImageRenderWitness?: SolarImageRenderWitness;
   representationSurfaceResolved?: boolean;
 }
 
@@ -77,7 +78,8 @@ function hasSourceFetchFailure(status: Partial<Record<WitnessSource, SourceStatu
 
 function solarImagePacketStatus(
   solarImage: SolarImageWitness | null,
-  renderStatus: RenderStatus
+  renderStatus: RenderStatus,
+  packetResolved: boolean
 ): PacketStatus {
   if (!solarImage?.imageUrl || renderStatus === "missing_url") {
     return "unavailable_witness";
@@ -95,7 +97,27 @@ function solarImagePacketStatus(
     return "fixture_fallback_active";
   }
 
+  if (packetResolved && renderStatus === "rendered") {
+    return "resolved";
+  }
+
   return "frontier_preserved";
+}
+
+function hasNonzeroNaturalDimensions(
+  renderWitness: SolarImageRenderWitness | null
+) {
+  return (
+    (renderWitness?.naturalWidth ?? 0) > 0 &&
+    (renderWitness?.naturalHeight ?? 0) > 0
+  );
+}
+
+function hasZeroNaturalDimensions(renderWitness: SolarImageRenderWitness | null) {
+  return (
+    renderWitness?.status === "rendered" &&
+    (renderWitness.naturalWidth === 0 || renderWitness.naturalHeight === 0)
+  );
 }
 
 export function classifyPacketStatus({
@@ -108,13 +130,19 @@ export function classifyPacketStatus({
   sourceErrors = {},
   eventCandidates = [],
   selectedEventIsExplicit = false,
-  solarImageRenderStatus = solarImage?.renderStatus ?? "not_attempted",
+  solarImageRenderWitness,
   representationSurfaceResolved = true
 }: ClassifyPacketInputs): TctPacketStatus {
   const statusReasons: string[] = [];
   const hasSelectedEvent = Boolean(selectedEvent);
   const hasImageUrl = Boolean(solarImage?.imageUrl);
-  const imageRendered = solarImageRenderStatus === "rendered";
+  const renderStatus = solarImageRenderWitness?.status ?? solarImage?.renderStatus ?? "not_attempted";
+  const imageRendered =
+    renderStatus === "rendered" &&
+    hasNonzeroNaturalDimensions(solarImageRenderWitness ?? null);
+  const imageZeroDimensions = hasZeroNaturalDimensions(
+    solarImageRenderWitness ?? null
+  );
   const hasPlasma = plasma.length > 0;
   const hasMag = mag.length > 0;
   const hasKp = kp.length > 0;
@@ -126,7 +154,6 @@ export function classifyPacketStatus({
     overlappingEvents.length > 0 && !selectedEventIsExplicit;
   const fixtureActive = hasFixtureStatus(sourceStatus, solarImage, plasma, mag, kp);
   const sourceFetchFailed = hasSourceFetchFailure(sourceStatus);
-  const imageStatus = solarImagePacketStatus(solarImage, solarImageRenderStatus);
   const representationSurfaceStatus: PacketStatus = representationSurfaceResolved
     ? "resolved"
     : "unavailable_witness";
@@ -149,11 +176,23 @@ export function classifyPacketStatus({
 
   if (!hasImageUrl) {
     statusReasons.push("Solar image witness has no renderable image URL.");
-  } else if (solarImageRenderStatus === "render_error") {
+  } else if (renderStatus === "render_error") {
     statusReasons.push("Solar image URL failed browser render.");
+  } else if (imageZeroDimensions) {
+    statusReasons.push(
+      "Solar image render witness reported zero natural dimensions."
+    );
+  } else if (imageRendered) {
+    statusReasons.push(
+      "Solar image render witness observed with nonzero natural dimensions."
+    );
+  } else if (renderStatus === "rendered") {
+    statusReasons.push(
+      "Solar image render status is rendered, but natural dimensions were not observed."
+    );
   } else if (!imageRendered) {
     statusReasons.push(
-      `Solar image URL exists, but browser render is ${solarImageRenderStatus}.`
+      `Solar image URL exists, but browser render is ${renderStatus}.`
     );
   }
 
@@ -205,7 +244,9 @@ export function classifyPacketStatus({
 
   const missingRequiredWitness =
     !hasImageUrl ||
-    solarImageRenderStatus === "render_error" ||
+    renderStatus === "missing_url" ||
+    renderStatus === "render_error" ||
+    imageZeroDimensions ||
     !hasPlasma ||
     !hasMag ||
     (!hasKp && !hasImageUrl && !hasPlasma && !hasMag);
@@ -238,6 +279,12 @@ export function classifyPacketStatus({
   } else {
     measurementClosure = "frontier_preserved";
   }
+
+  const imageStatus = solarImagePacketStatus(
+    solarImage,
+    imageZeroDimensions ? "render_error" : renderStatus,
+    measurementClosure === "resolved"
+  );
 
   if (measurementClosure === "resolved") {
     statusReasons.push(

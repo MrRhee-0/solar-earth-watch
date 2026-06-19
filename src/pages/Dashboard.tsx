@@ -8,6 +8,7 @@ import type {
   MagPoint,
   PlasmaPoint,
   RenderStatus,
+  SolarImageRenderWitness,
   SolarImageWitness,
   SourceStatus,
   WitnessSource
@@ -56,6 +57,55 @@ const EMPTY_DATA: DashboardData = {
   refreshedAt: null
 };
 
+const EMPTY_RENDER_WITNESS: SolarImageRenderWitness = {
+  status: "not_attempted",
+  naturalWidth: null,
+  naturalHeight: null,
+  clientWidth: null,
+  clientHeight: null,
+  observedAt: null,
+  error: null
+};
+
+function renderWitnessFromStatus(
+  status: RenderStatus,
+  error: string | null = null
+): SolarImageRenderWitness {
+  return {
+    ...EMPTY_RENDER_WITNESS,
+    status,
+    error
+  };
+}
+
+function deriveImageUrlDiagnostics(imageUrl: string | null) {
+  if (!imageUrl) {
+    return {
+      remoteHelioviewerEndpointPath: null,
+      imageUrlBeginsWithApiHelioviewer: false,
+      displayTruePresent: false,
+      layersContainSdoAia171: false
+    };
+  }
+
+  const parsedUrl = new URL(imageUrl, "https://solar-earth-watch.local");
+  const endpointPath = `${parsedUrl.pathname}${parsedUrl.search}`;
+  const beginsWithApiHelioviewer = parsedUrl.pathname.startsWith(
+    "/api/helioviewer"
+  );
+  const remoteHelioviewerEndpointPath = beginsWithApiHelioviewer
+    ? endpointPath.replace(/^\/api\/helioviewer/, "")
+    : null;
+  const layers = parsedUrl.searchParams.get("layers") ?? "";
+
+  return {
+    remoteHelioviewerEndpointPath,
+    imageUrlBeginsWithApiHelioviewer: beginsWithApiHelioviewer,
+    displayTruePresent: parsedUrl.searchParams.get("display") === "true",
+    layersContainSdoAia171: layers.includes("SDO,AIA,AIA,171")
+  };
+}
+
 function sortEvents(events: EventWitness[]): EventWitness[] {
   return events
     .slice()
@@ -70,8 +120,8 @@ export function Dashboard() {
   const [data, setData] = useState<DashboardData>(EMPTY_DATA);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [selectedEventIsExplicit, setSelectedEventIsExplicit] = useState(false);
-  const [solarImageRenderStatus, setSolarImageRenderStatus] =
-    useState<RenderStatus>("not_attempted");
+  const [solarImageRenderWitness, setSolarImageRenderWitness] =
+    useState<SolarImageRenderWitness>(EMPTY_RENDER_WITNESS);
   const [loading, setLoading] = useState(false);
 
   const loadWitnesses = useCallback(async () => {
@@ -108,10 +158,16 @@ export function Dashboard() {
         },
         refreshedAt: new Date().toISOString()
       });
-      setSolarImageRenderStatus(
+      setSolarImageRenderWitness(
         solarImage.data?.imageUrl
-          ? solarImage.data.renderStatus ?? "not_attempted"
-          : "missing_url"
+          ? renderWitnessFromStatus(
+              solarImage.data.renderStatus ?? "not_attempted",
+              solarImage.data.error ?? null
+            )
+          : renderWitnessFromStatus(
+              "missing_url",
+              "Solar image witness has no renderable image URL."
+            )
       );
     } finally {
       setLoading(false);
@@ -162,36 +218,53 @@ export function Dashboard() {
         sourceErrors: data.errors,
         eventCandidates: data.events,
         selectedEventIsExplicit,
-        solarImageRenderStatus,
+        solarImageRenderWitness,
         representationSurfaceResolved: true
       }),
-    [data, selectedEvent, selectedEventIsExplicit, solarImageRenderStatus]
+    [data, selectedEvent, selectedEventIsExplicit, solarImageRenderWitness]
   );
 
   const diagnostics = useMemo(
-    () => ({
-      helioviewerMetadataStatus:
-        data.solarImage?.metadataStatus ?? data.status.HELIOVIEWER ?? "unavailable",
-      helioviewerImageFetchStatus:
-        data.solarImage?.imageFetchStatus ?? data.status.HELIOVIEWER ?? "unavailable",
-      helioviewerRenderStatus: solarImageRenderStatus,
-      imageUrl: data.solarImage?.imageUrl ?? null,
-      donkiStatus: data.status.NASA_DONKI ?? "unavailable",
-      plasmaStatus: data.status.NOAA_SWPC_SOLAR_WIND_PLASMA ?? "unavailable",
-      magStatus: data.status.NOAA_SWPC_SOLAR_WIND_MAG ?? "unavailable",
-      kpStatus: data.status.NOAA_SWPC_KP ?? "unavailable",
-      selectedEventId,
-      alignmentPassed,
-      carrierWindowStart: carrierWindow?.start.toISOString() ?? null,
-      carrierWindowEnd: carrierWindow?.end.toISOString() ?? null
-    }),
+    () => {
+      const imageUrl = data.solarImage?.imageUrl ?? null;
+      const imageUrlDiagnostics = deriveImageUrlDiagnostics(imageUrl);
+
+      return {
+        helioviewerMetadataStatus:
+          data.solarImage?.metadataStatus ??
+          data.status.HELIOVIEWER ??
+          "unavailable",
+        helioviewerImageFetchStatus:
+          data.solarImage?.imageFetchStatus ??
+          data.status.HELIOVIEWER ??
+          "unavailable",
+        helioviewerRenderStatus: solarImageRenderWitness.status,
+        imageUrl,
+        proxiedImageUrl: imageUrl,
+        naturalWidth: solarImageRenderWitness.naturalWidth,
+        naturalHeight: solarImageRenderWitness.naturalHeight,
+        clientWidth: solarImageRenderWitness.clientWidth,
+        clientHeight: solarImageRenderWitness.clientHeight,
+        renderObservedAt: solarImageRenderWitness.observedAt,
+        renderError: solarImageRenderWitness.error ?? null,
+        ...imageUrlDiagnostics,
+        donkiStatus: data.status.NASA_DONKI ?? "unavailable",
+        plasmaStatus: data.status.NOAA_SWPC_SOLAR_WIND_PLASMA ?? "unavailable",
+        magStatus: data.status.NOAA_SWPC_SOLAR_WIND_MAG ?? "unavailable",
+        kpStatus: data.status.NOAA_SWPC_KP ?? "unavailable",
+        selectedEventId,
+        alignmentPassed,
+        carrierWindowStart: carrierWindow?.start.toISOString() ?? null,
+        carrierWindowEnd: carrierWindow?.end.toISOString() ?? null
+      };
+    },
     [
       alignmentPassed,
       carrierWindow,
       data.solarImage,
       data.status,
       selectedEventId,
-      solarImageRenderStatus
+      solarImageRenderWitness
     ]
   );
 
@@ -215,7 +288,7 @@ export function Dashboard() {
           <div className="dashboard-grid dashboard-grid--top">
             <SolarImagePanel
               witness={data.solarImage}
-              onRenderStatusChange={setSolarImageRenderStatus}
+              onRenderStatusChange={setSolarImageRenderWitness}
             />
             <EventTimeline
               events={data.events}
