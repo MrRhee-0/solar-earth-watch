@@ -8,11 +8,13 @@ export default defineConfig({
       "/proxy/donki": {
         target: "https://kauai.ccmc.gsfc.nasa.gov",
         changeOrigin: true,
+        secure: false,
         rewrite: (path) => path.replace(/^\/proxy\/donki/, "/DONKI/WS/get")
       },
       "/proxy/helioviewer": {
         target: "https://api.helioviewer.org",
         changeOrigin: true,
+        secure: false,
         rewrite: (path) => path.replace(/^\/proxy\/helioviewer/, "/v2")
       }
     }
