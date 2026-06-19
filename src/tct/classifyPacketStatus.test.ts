@@ -6,7 +6,8 @@ import type {
   PlasmaPoint,
   RenderStatus,
   SolarImageRenderWitness,
-  SolarImageWitness
+  SolarImageWitness,
+  WitnessEvidence
 } from "../data/types";
 import { classifyPacketStatus } from "./classifyPacketStatus";
 
@@ -34,6 +35,12 @@ const image: SolarImageWitness = {
   metadataStatus: "live",
   imageFetchStatus: "live",
   renderStatus: "rendered",
+  evidenceStatus: "live_parsed",
+  isLiveImage: true,
+  isFallbackImage: false,
+  fallbackReason: null,
+  attemptedUrls: ["https://example.invalid/sun.png"],
+  selectedUrl: "https://example.invalid/sun.png",
   error: null,
   source: "HELIOVIEWER"
 };
@@ -92,6 +99,64 @@ function renderWitness(status: RenderStatus): SolarImageRenderWitness {
   };
 }
 
+function evidence(overrides: Partial<WitnessEvidence> = {}): WitnessEvidence[] {
+  const base: WitnessEvidence[] = [
+    {
+      sourceKey: "HELIOVIEWER",
+      evidenceStatus: "live_rendered",
+      isLive: true,
+      isFallback: false,
+      isRenderable: true,
+      recordCount: 1,
+      latestTimestamp: image.timestamp
+    },
+    {
+      sourceKey: "NASA_DONKI",
+      evidenceStatus: "live_parsed",
+      isLive: true,
+      isFallback: false,
+      isRenderable: false,
+      recordCount: 1,
+      latestTimestamp: event.startTime
+    },
+    {
+      sourceKey: "NOAA_SWPC_SOLAR_WIND_PLASMA",
+      evidenceStatus: "live_parsed",
+      isLive: true,
+      isFallback: false,
+      isRenderable: false,
+      recordCount: plasma.length,
+      latestTimestamp: plasma[plasma.length - 1]?.timeTag
+    },
+    {
+      sourceKey: "NOAA_SWPC_SOLAR_WIND_MAG",
+      evidenceStatus: "live_parsed",
+      isLive: true,
+      isFallback: false,
+      isRenderable: false,
+      recordCount: mag.length,
+      latestTimestamp: mag[mag.length - 1]?.timeTag
+    },
+    {
+      sourceKey: "NOAA_SWPC_KP",
+      evidenceStatus: "live_parsed",
+      isLive: true,
+      isFallback: false,
+      isRenderable: false,
+      recordCount: kp.length,
+      latestTimestamp: kp[kp.length - 1]?.timeTag
+    }
+  ];
+
+  if (!overrides.sourceKey) {
+    return base;
+  }
+
+  return base.map((entry) =>
+    entry.sourceKey === overrides.sourceKey ? { ...entry, ...overrides } : entry
+  );
+}
+
 describe("classifyPacketStatus", () => {
   it("keeps the target underdeclared when no X is selected", () => {
     const packet = classifyPacketStatus({
@@ -101,7 +166,8 @@ describe("classifyPacketStatus", () => {
       mag,
       kp,
       sourceStatus: liveStatus,
-      solarImageRenderWitness: renderWitness("rendered")
+      solarImageRenderWitness: renderWitness("rendered"),
+      witnessEvidence: evidence()
     });
 
     expect(packet.measurementClosure).toBe("underdeclared");
@@ -118,7 +184,13 @@ describe("classifyPacketStatus", () => {
       sourceStatus: liveStatus,
       selectedEventIsExplicit: true,
       eventCandidates: [event],
-      solarImageRenderWitness: renderWitness("missing_url")
+      solarImageRenderWitness: renderWitness("missing_url"),
+      witnessEvidence: evidence({
+        sourceKey: "HELIOVIEWER",
+        evidenceStatus: "unavailable",
+        isLive: false,
+        isRenderable: false
+      })
     });
 
     expect(packet.measurementClosure).toBe("unavailable_witness");
@@ -140,7 +212,14 @@ describe("classifyPacketStatus", () => {
       sourceStatus: liveStatus,
       selectedEventIsExplicit: true,
       eventCandidates: [event],
-      solarImageRenderWitness: renderWitness("render_error")
+      solarImageRenderWitness: renderWitness("render_error"),
+      witnessEvidence: evidence({
+        sourceKey: "HELIOVIEWER",
+        evidenceStatus: "error",
+        isLive: false,
+        isRenderable: false,
+        reason: "Solar image URL failed browser render."
+      })
     });
 
     expect(packet.measurementClosure).toBe("unavailable_witness");
@@ -175,7 +254,8 @@ describe("classifyPacketStatus", () => {
       sourceStatus: liveStatus,
       selectedEventIsExplicit: true,
       eventCandidates: [event],
-      solarImageRenderWitness: renderWitness("rendered")
+      solarImageRenderWitness: renderWitness("rendered"),
+      witnessEvidence: evidence()
     });
 
     expect(packet.measurementClosure).toBe("frontier_preserved");
@@ -183,8 +263,15 @@ describe("classifyPacketStatus", () => {
       "Solar image render witness observed with nonzero natural dimensions."
     );
     expect(packet.statusReasons).toContain(
-      "Required witnesses exist, but event-carrier alignment is not yet closure-sufficient."
+      "Required witnesses are present, but event-carrier alignment is not closure-sufficient."
     );
+    expect(
+      packet.witnessRoles.find((row) => row.label === "solar image witness")
+    ).toMatchObject({
+      sourceFetch: "live",
+      evidence: "live_rendered",
+      closure: "frontier_preserved"
+    });
   });
 
   it("keeps the frontier when image render is loading even with a URL", () => {
@@ -197,7 +284,12 @@ describe("classifyPacketStatus", () => {
       sourceStatus: liveStatus,
       selectedEventIsExplicit: true,
       eventCandidates: [event],
-      solarImageRenderWitness: renderWitness("loading")
+      solarImageRenderWitness: renderWitness("loading"),
+      witnessEvidence: evidence({
+        sourceKey: "HELIOVIEWER",
+        evidenceStatus: "live_parsed",
+        isRenderable: false
+      })
     });
 
     expect(packet.measurementClosure).toBe("frontier_preserved");
@@ -216,10 +308,18 @@ describe("classifyPacketStatus", () => {
       sourceStatus: liveStatus,
       selectedEventIsExplicit: true,
       eventCandidates: [event],
-      solarImageRenderWitness: renderWitness("rendered")
+      solarImageRenderWitness: renderWitness("rendered"),
+      witnessEvidence: evidence()
     });
 
     expect(packet.measurementClosure).toBe("resolved");
+    expect(
+      packet.witnessRoles.find((row) => row.label === "solar image witness")
+    ).toMatchObject({
+      sourceFetch: "live",
+      evidence: "live_rendered",
+      closure: "resolved"
+    });
     expect(packet.statusReasons).toContain(
       "Solar image render witness observed with nonzero natural dimensions."
     );
@@ -235,7 +335,11 @@ describe("classifyPacketStatus", () => {
         ...image,
         source: "FIXTURE",
         metadataStatus: "fixture",
-        imageFetchStatus: "fixture"
+        imageFetchStatus: "fixture",
+        evidenceStatus: "fixture_fallback",
+        isLiveImage: false,
+        isFallbackImage: true,
+        fallbackReason: "source fetch failure: HTTP 404"
       },
       plasma: plasma.map((point) => ({ ...point, source: "FIXTURE" })),
       mag,
@@ -247,10 +351,26 @@ describe("classifyPacketStatus", () => {
       },
       selectedEventIsExplicit: true,
       eventCandidates: [event],
-      solarImageRenderWitness: renderWitness("rendered")
+      solarImageRenderWitness: renderWitness("rendered"),
+      witnessEvidence: evidence({
+        sourceKey: "HELIOVIEWER",
+        evidenceStatus: "fixture_fallback",
+        isLive: false,
+        isFallback: true,
+        isRenderable: true,
+        reason: "source fetch failure: HTTP 404"
+      })
     });
 
     expect(packet.measurementClosure).toBe("fixture_fallback_active");
+    expect(packet.measurementClosure).not.toBe("resolved");
+    expect(packet.statusReasons).toContain(
+      "Solar image is rendered from fallback, not live Helioviewer witness."
+    );
+    expect(
+      packet.witnessRoles.find((row) => row.label === "solar image witness")
+        ?.evidence
+    ).toBe("fixture_fallback");
   });
 
   it("detects preservation-boundary failure for non-explicit overlapping candidates", () => {
@@ -269,7 +389,8 @@ describe("classifyPacketStatus", () => {
       sourceStatus: liveStatus,
       eventCandidates: [event, overlapping],
       selectedEventIsExplicit: false,
-      solarImageRenderWitness: renderWitness("rendered")
+      solarImageRenderWitness: renderWitness("rendered"),
+      witnessEvidence: evidence()
     });
 
     expect(packet.measurementClosure).toBe("preservation_boundary_failure");
@@ -286,6 +407,12 @@ describe("classifyPacketStatus", () => {
       selectedEventIsExplicit: true,
       eventCandidates: [event],
       solarImageRenderWitness: renderWitness("missing_url"),
+      witnessEvidence: evidence({
+        sourceKey: "HELIOVIEWER",
+        evidenceStatus: "unavailable",
+        isLive: false,
+        isRenderable: false
+      }),
       representationSurfaceResolved: true
     });
 

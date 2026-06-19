@@ -13,6 +13,12 @@ const imageWitness: SolarImageWitness = {
   metadataStatus: "live",
   imageFetchStatus: "live",
   renderStatus: "not_attempted",
+  evidenceStatus: "live_parsed",
+  isLiveImage: true,
+  isFallbackImage: false,
+  fallbackReason: null,
+  attemptedUrls: ["/api/helioviewer/v2/takeScreenshot/?display=true"],
+  selectedUrl: "/api/helioviewer/v2/takeScreenshot/?display=true",
   error: null,
   source: "HELIOVIEWER"
 };
@@ -105,9 +111,51 @@ describe("SolarImagePanel", () => {
       })
     );
     expect(screen.getByText("BROWSER RENDER: rendered")).toBeInTheDocument();
+    expect(screen.getByText("EVIDENCE: live_rendered")).toBeInTheDocument();
     expect(
-      screen.getByText("Solar image render witness preserved.")
+      screen.getByText("Live solar image witness rendered.")
     ).toBeInTheDocument();
+  });
+
+  it("labels rendered fallback snapshots without live witness closure", () => {
+    const onRenderStatusChange = vi.fn();
+
+    render(
+      <SolarImagePanel
+        witness={{
+          ...imageWitness,
+          metadataStatus: "error",
+          imageFetchStatus: "fixture",
+          evidenceStatus: "fixture_fallback",
+          isLiveImage: false,
+          isFallbackImage: true,
+          fallbackReason: "source fetch failure: HTTP 404",
+          source: "FIXTURE"
+        }}
+        onRenderStatusChange={onRenderStatusChange}
+      />
+    );
+
+    const image = screen.getByAltText("Recent Sun image witness");
+    setImageDimensions(image, {
+      naturalWidth: 1024,
+      naturalHeight: 1024
+    });
+
+    fireEvent.load(image);
+
+    expect(screen.getByText("EVIDENCE: fixture_fallback")).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Rendered fallback snapshot; live solar image witness remains unclosed."
+      )
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "Fallback solar snapshot rendered. Live solar image witness is not resolved."
+      )
+    ).toBeInTheDocument();
+    expect(screen.getByText("source fetch failure: HTTP 404")).toBeInTheDocument();
   });
 
   it("emits render_error when onLoad reports zero natural dimensions", () => {
@@ -166,6 +214,6 @@ describe("SolarImagePanel", () => {
     expect(
       screen.getAllByText("Solar image URL failed browser render.").length
     ).toBeGreaterThan(0);
-    expect(screen.getByText(imageWitness.imageUrl ?? "")).toBeInTheDocument();
+    expect(screen.getAllByText(imageWitness.imageUrl ?? "").length).toBeGreaterThan(0);
   });
 });

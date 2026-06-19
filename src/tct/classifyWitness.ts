@@ -1,4 +1,4 @@
-import type { SourceStatus } from "../data/types";
+import type { EvidenceStatus, SourceStatus } from "../data/types";
 import type { PacketStatus, WitnessRole } from "./packetTypes";
 
 export function sourceStatusToPacketStatus(
@@ -23,13 +23,18 @@ export function sourceStatusToPacketStatus(
 export function witnessRole(
   label: string,
   source: string,
+  sourceFetch: SourceStatus,
+  evidence: EvidenceStatus,
   role: WitnessRole,
-  status: PacketStatus
+  closure: PacketStatus
 ) {
   return {
     label,
     source,
+    sourceFetch,
+    evidence,
     role,
-    status
+    closure,
+    status: closure
   };
 }

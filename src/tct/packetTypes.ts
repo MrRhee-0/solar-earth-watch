@@ -1,3 +1,5 @@
+import type { EvidenceStatus, SourceStatus } from "../data/types";
+
 export type PacketStatus =
   | "resolved"
   | "frontier_preserved"
@@ -30,7 +32,10 @@ export interface TctPacketStatus {
   witnessRoles: Array<{
     label: string;
     source: string;
+    sourceFetch: SourceStatus;
+    evidence: EvidenceStatus;
     role: WitnessRole;
+    closure: PacketStatus;
     status: PacketStatus;
   }>;
 }

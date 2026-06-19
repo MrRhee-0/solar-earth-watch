@@ -1,4 +1,5 @@
 import type {
+  EvidenceStatus,
   EventWitness,
   KpPoint,
   MagPoint,
@@ -7,11 +8,12 @@ import type {
   SolarImageRenderWitness,
   SolarImageWitness,
   SourceStatus,
+  WitnessEvidence,
   WitnessSource
 } from "../data/types";
 import { hasCarrierAlignment, overlappingEventCandidates } from "./alignment";
 import type { PacketStatus, TctPacketStatus } from "./packetTypes";
-import { sourceStatusToPacketStatus, witnessRole } from "./classifyWitness";
+import { witnessRole } from "./classifyWitness";
 
 export const TCT_C =
   "Expose one solar-to-Earth event as preserved distinguishability across solar image, event record, L1 carrier trace, magnetometer trace, and Earth-response marker.";
@@ -51,7 +53,76 @@ export interface ClassifyPacketInputs {
   eventCandidates?: EventWitness[];
   selectedEventIsExplicit?: boolean;
   solarImageRenderWitness?: SolarImageRenderWitness;
+  witnessEvidence?: WitnessEvidence[];
   representationSurfaceResolved?: boolean;
+}
+
+function isFallbackEvidence(evidence: WitnessEvidence | undefined) {
+  return Boolean(
+    evidence?.isFallback ||
+      evidence?.evidenceStatus === "cached_snapshot_fallback" ||
+      evidence?.evidenceStatus === "fixture_fallback"
+  );
+}
+
+function evidenceToPacketStatus(
+  evidence: WitnessEvidence,
+  hasData: boolean
+): PacketStatus {
+  if (evidence.evidenceStatus === "error") {
+    return "source_fetch_failure";
+  }
+
+  if (isFallbackEvidence(evidence)) {
+    return "fixture_fallback_active";
+  }
+
+  if (!hasData || evidence.evidenceStatus === "unavailable") {
+    return "unavailable_witness";
+  }
+
+  return "frontier_preserved";
+}
+
+function evidenceFor(
+  evidenceEntries: WitnessEvidence[],
+  sourceKey: string,
+  fallback: WitnessEvidence
+) {
+  return (
+    evidenceEntries.find((entry) => entry.sourceKey === sourceKey) ?? fallback
+  );
+}
+
+function inferEvidence(
+  sourceKey: string,
+  status: SourceStatus | undefined,
+  hasData: boolean,
+  recordCount: number | null = null,
+  latestTimestamp: string | null = null,
+  reason: string | null = null
+): WitnessEvidence {
+  const evidenceStatus: EvidenceStatus =
+    status === "fixture"
+      ? "fixture_fallback"
+      : status === "error"
+        ? "error"
+        : status === "live" && hasData
+          ? "live_parsed"
+          : status === "live"
+            ? "empty_live"
+            : "unavailable";
+
+  return {
+    sourceKey,
+    evidenceStatus,
+    isLive: evidenceStatus === "live_parsed" || evidenceStatus === "empty_live",
+    isFallback: evidenceStatus === "fixture_fallback",
+    isRenderable: false,
+    recordCount,
+    latestTimestamp,
+    reason
+  };
 }
 
 function hasFixtureStatus(
@@ -120,6 +191,79 @@ function hasZeroNaturalDimensions(renderWitness: SolarImageRenderWitness | null)
   );
 }
 
+function inferSolarEvidence(
+  solarImage: SolarImageWitness | null,
+  renderWitness: SolarImageRenderWitness | undefined,
+  hasImageUrl: boolean,
+  imageRendered: boolean
+): WitnessEvidence {
+  if (!solarImage) {
+    return inferEvidence(
+      "HELIOVIEWER",
+      "unavailable",
+      false,
+      0,
+      null,
+      "Solar image witness is unavailable."
+    );
+  }
+
+  if (!hasImageUrl || renderWitness?.status === "missing_url") {
+    return {
+      sourceKey: "HELIOVIEWER",
+      evidenceStatus: "unavailable",
+      isLive: false,
+      isFallback: false,
+      isRenderable: false,
+      recordCount: 0,
+      latestTimestamp: solarImage.timestamp,
+      reason: "Solar image witness has no renderable image URL."
+    };
+  }
+
+  if (renderWitness?.status === "render_error") {
+    return {
+      sourceKey: "HELIOVIEWER",
+      evidenceStatus: "error",
+      isLive: false,
+      isFallback: solarImage.isFallbackImage,
+      isRenderable: false,
+      recordCount: 1,
+      latestTimestamp: solarImage.timestamp,
+      observedAt: renderWitness.observedAt,
+      reason: renderWitness.error ?? "Solar image URL failed browser render."
+    };
+  }
+
+  if (solarImage.isFallbackImage) {
+    return {
+      sourceKey: "HELIOVIEWER",
+      evidenceStatus: solarImage.evidenceStatus,
+      isLive: false,
+      isFallback: true,
+      isRenderable: imageRendered,
+      recordCount: 1,
+      latestTimestamp: solarImage.timestamp,
+      observedAt: renderWitness?.observedAt ?? null,
+      reason:
+        solarImage.fallbackReason ??
+        "Solar image is rendered from fallback, not live Helioviewer witness."
+    };
+  }
+
+  return {
+    sourceKey: "HELIOVIEWER",
+    evidenceStatus: imageRendered ? "live_rendered" : solarImage.evidenceStatus,
+    isLive: solarImage.isLiveImage,
+    isFallback: false,
+    isRenderable: imageRendered,
+    recordCount: hasImageUrl ? 1 : 0,
+    latestTimestamp: solarImage.timestamp,
+    observedAt: renderWitness?.observedAt ?? null,
+    reason: solarImage.error ?? null
+  };
+}
+
 export function classifyPacketStatus({
   selectedEvent,
   solarImage,
@@ -131,6 +275,7 @@ export function classifyPacketStatus({
   eventCandidates = [],
   selectedEventIsExplicit = false,
   solarImageRenderWitness,
+  witnessEvidence = [],
   representationSurfaceResolved = true
 }: ClassifyPacketInputs): TctPacketStatus {
   const statusReasons: string[] = [];
@@ -152,11 +297,77 @@ export function classifyPacketStatus({
   const overlappingEvents = overlappingEventCandidates(selectedEvent, eventCandidates);
   const preservationBoundaryFails =
     overlappingEvents.length > 0 && !selectedEventIsExplicit;
-  const fixtureActive = hasFixtureStatus(sourceStatus, solarImage, plasma, mag, kp);
   const sourceFetchFailed = hasSourceFetchFailure(sourceStatus);
   const representationSurfaceStatus: PacketStatus = representationSurfaceResolved
     ? "resolved"
     : "unavailable_witness";
+  const solarEvidence = evidenceFor(
+    witnessEvidence,
+    "HELIOVIEWER",
+    inferSolarEvidence(
+      solarImage,
+      solarImageRenderWitness,
+      hasImageUrl,
+      imageRendered
+    )
+  );
+  const donkiEvidence = evidenceFor(
+    witnessEvidence,
+    "NASA_DONKI",
+    inferEvidence(
+      "NASA_DONKI",
+      sourceStatus.NASA_DONKI,
+      hasSelectedEvent,
+      eventCandidates.length,
+      selectedEvent?.startTime ?? null
+    )
+  );
+  const plasmaEvidence = evidenceFor(
+    witnessEvidence,
+    "NOAA_SWPC_SOLAR_WIND_PLASMA",
+    inferEvidence(
+      "NOAA_SWPC_SOLAR_WIND_PLASMA",
+      sourceStatus.NOAA_SWPC_SOLAR_WIND_PLASMA,
+      hasPlasma,
+      plasma.length,
+      plasma[plasma.length - 1]?.timeTag ?? null
+    )
+  );
+  const magEvidence = evidenceFor(
+    witnessEvidence,
+    "NOAA_SWPC_SOLAR_WIND_MAG",
+    inferEvidence(
+      "NOAA_SWPC_SOLAR_WIND_MAG",
+      sourceStatus.NOAA_SWPC_SOLAR_WIND_MAG,
+      hasMag,
+      mag.length,
+      mag[mag.length - 1]?.timeTag ?? null
+    )
+  );
+  const kpEvidence = evidenceFor(
+    witnessEvidence,
+    "NOAA_SWPC_KP",
+    inferEvidence(
+      "NOAA_SWPC_KP",
+      sourceStatus.NOAA_SWPC_KP,
+      hasKp,
+      kp.length,
+      kp[kp.length - 1]?.timeTag ?? null
+    )
+  );
+  const requiredEvidence = [
+    solarEvidence,
+    donkiEvidence,
+    plasmaEvidence,
+    magEvidence,
+    kpEvidence
+  ];
+  const fallbackEvidenceSources = requiredEvidence
+    .filter(isFallbackEvidence)
+    .map((evidence) => evidence.sourceKey);
+  const fixtureActive =
+    fallbackEvidenceSources.length > 0 ||
+    hasFixtureStatus(sourceStatus, solarImage, plasma, mag, kp);
 
   if (!hasSelectedEvent) {
     statusReasons.push("No selected solar event packet X.");
@@ -196,6 +407,12 @@ export function classifyPacketStatus({
     );
   }
 
+  if (isFallbackEvidence(solarEvidence)) {
+    statusReasons.push(
+      "Solar image is rendered from fallback, not live Helioviewer witness."
+    );
+  }
+
   if (!hasPlasma) {
     statusReasons.push("unavailable witness: L1 plasma carrier has no points.");
   }
@@ -232,13 +449,19 @@ export function classifyPacketStatus({
     !alignmentPassed
   ) {
     statusReasons.push(
-      "Required witnesses exist, but event-carrier alignment is not yet closure-sufficient."
+      "Required witnesses are present, but event-carrier alignment is not closure-sufficient."
     );
   }
 
   if (fixtureActive) {
     statusReasons.push(
       "fixture fallback active: at least one witness surface is fixture-backed; closure is not claimed from fixture data."
+    );
+  }
+
+  if (fallbackEvidenceSources.length > 0) {
+    statusReasons.push(
+      `fixture fallback active: required witness fallback evidence present: ${fallbackEvidenceSources.join(", ")}.`
     );
   }
 
@@ -249,11 +472,20 @@ export function classifyPacketStatus({
     imageZeroDimensions ||
     !hasPlasma ||
     !hasMag ||
-    (!hasKp && !hasImageUrl && !hasPlasma && !hasMag);
+    !hasKp ||
+    solarEvidence.evidenceStatus === "unavailable" ||
+    solarEvidence.evidenceStatus === "error";
+  const hasLiveRequiredEvidence =
+    solarEvidence.evidenceStatus === "live_rendered" &&
+    donkiEvidence.evidenceStatus === "live_parsed" &&
+    plasmaEvidence.evidenceStatus === "live_parsed" &&
+    magEvidence.evidenceStatus === "live_parsed" &&
+    kpEvidence.evidenceStatus === "live_parsed";
   const readyForResolved =
     hasSelectedEvent &&
     hasImageUrl &&
     imageRendered &&
+    hasLiveRequiredEvidence &&
     hasPlasma &&
     hasMag &&
     hasKp &&
@@ -270,10 +502,10 @@ export function classifyPacketStatus({
     measurementClosure = "preservation_boundary_failure";
   } else if (missingRequiredWitness) {
     measurementClosure = "unavailable_witness";
-  } else if (sourceFetchFailed) {
-    measurementClosure = "source_fetch_failure";
   } else if (fixtureActive) {
     measurementClosure = "fixture_fallback_active";
+  } else if (sourceFetchFailed) {
+    measurementClosure = "source_fetch_failure";
   } else if (readyForResolved) {
     measurementClosure = "resolved";
   } else {
@@ -285,6 +517,12 @@ export function classifyPacketStatus({
     imageZeroDimensions ? "render_error" : renderStatus,
     measurementClosure === "resolved"
   );
+  const donkiStatus = selectedEvent
+    ? evidenceToPacketStatus(donkiEvidence, true)
+    : "underdeclared";
+  const plasmaStatus = evidenceToPacketStatus(plasmaEvidence, hasPlasma);
+  const magStatus = evidenceToPacketStatus(magEvidence, hasMag);
+  const kpStatus = evidenceToPacketStatus(kpEvidence, hasKp);
 
   if (measurementClosure === "resolved") {
     statusReasons.push(
@@ -309,57 +547,64 @@ export function classifyPacketStatus({
       witnessRole(
         "solar image witness",
         "HELIOVIEWER",
+        sourceStatus.HELIOVIEWER ?? "unavailable",
+        solarEvidence.evidenceStatus,
         "fixed_witness",
         imageStatus
       ),
       witnessRole(
         "DONKI event record",
         "NASA_DONKI",
+        sourceStatus.NASA_DONKI ?? "unavailable",
+        donkiEvidence.evidenceStatus,
         "fixed_witness",
-        selectedEvent
-          ? sourceStatusToPacketStatus(sourceStatus.NASA_DONKI, true)
-          : "underdeclared"
+        donkiStatus
       ),
       witnessRole(
         "L1 plasma carrier trace",
         "NOAA_SWPC_SOLAR_WIND_PLASMA",
+        sourceStatus.NOAA_SWPC_SOLAR_WIND_PLASMA ?? "unavailable",
+        plasmaEvidence.evidenceStatus,
         "target_forced_carrier",
-        sourceStatusToPacketStatus(
-          sourceStatus.NOAA_SWPC_SOLAR_WIND_PLASMA,
-          hasPlasma
-        )
+        plasmaStatus
       ),
       witnessRole(
         "L1 magnetometer carrier trace",
         "NOAA_SWPC_SOLAR_WIND_MAG",
+        sourceStatus.NOAA_SWPC_SOLAR_WIND_MAG ?? "unavailable",
+        magEvidence.evidenceStatus,
         "target_forced_carrier",
-        sourceStatusToPacketStatus(sourceStatus.NOAA_SWPC_SOLAR_WIND_MAG, hasMag)
+        magStatus
       ),
       witnessRole(
         "planetary K-index Earth-response marker",
         "NOAA_SWPC_KP",
+        sourceStatus.NOAA_SWPC_KP ?? "unavailable",
+        kpEvidence.evidenceStatus,
         "measurement_closure",
-        hasKp
-          ? sourceStatusToPacketStatus(sourceStatus.NOAA_SWPC_KP, hasKp)
-          : hasImageUrl || hasPlasma || hasMag
-            ? "frontier_preserved"
-            : "unavailable_witness"
+        kpStatus
       ),
       witnessRole(
         "Γ_C dashboard alignment/control relation",
         "dashboard",
+        "live",
+        alignmentPassed ? "live_parsed" : "unavailable",
         "control_relation",
         alignmentPassed ? "frontier_preserved" : "unresolved_carrier_alignment"
       ),
       witnessRole(
         "Rem_r display-only metadata",
         "dashboard",
+        "live",
+        "live_parsed",
         "removable_burden",
         "frontier_preserved"
       ),
       witnessRole(
         "downstream representation surface",
         "Solar Earth Watch UI",
+        "live",
+        representationSurfaceResolved ? "live_rendered" : "unavailable",
         "downstream_surface",
         representationSurfaceStatus
       )

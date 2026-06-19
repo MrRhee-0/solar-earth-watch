@@ -30,9 +30,28 @@ function asString(value: unknown): string | null {
   return String(value);
 }
 
+function normalizeHelioviewerTimestamp(value: unknown): string | null {
+  const timestamp = asString(value);
+
+  if (!timestamp) {
+    return null;
+  }
+
+  const spaceSeparatedUtc = timestamp.match(
+    /^(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2}(?:\.\d+)?)$/
+  );
+
+  if (spaceSeparatedUtc) {
+    return `${spaceSeparatedUtc[1]}T${spaceSeparatedUtc[2]}Z`;
+  }
+
+  return timestamp;
+}
+
 export function buildHelioviewerScreenshotUrl(
   timestamp: string,
-  config = HELIOVIEWER_CONFIG
+  config = HELIOVIEWER_CONFIG,
+  cacheBust?: string | number
 ): string {
   const params = new URLSearchParams({
     date: timestamp,
@@ -51,6 +70,10 @@ export function buildHelioviewerScreenshotUrl(
     display: "true",
     watermark: "true"
   });
+
+  if (cacheBust !== undefined) {
+    params.set("_t", String(cacheBust));
+  }
 
   return `${config.apiBasePath}/takeScreenshot/?${params.toString()}`;
 }
@@ -72,7 +95,9 @@ export function normalizeHelioviewerMetadata(
   config = HELIOVIEWER_CONFIG
 ): SolarImageWitness {
   const timestamp = isRecord(data)
-    ? asString(data.date) ?? asString(data.time) ?? new Date().toISOString()
+    ? normalizeHelioviewerTimestamp(data.date) ??
+      normalizeHelioviewerTimestamp(data.time) ??
+      new Date().toISOString()
     : new Date().toISOString();
 
   return {
@@ -85,6 +110,12 @@ export function normalizeHelioviewerMetadata(
     metadataStatus: "live",
     imageFetchStatus: "unavailable",
     renderStatus: "not_attempted",
+    evidenceStatus: "live_parsed",
+    isLiveImage: false,
+    isFallbackImage: false,
+    fallbackReason: null,
+    attemptedUrls: [],
+    selectedUrl: null,
     error: null,
     source: "HELIOVIEWER"
   };

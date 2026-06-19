@@ -19,6 +19,27 @@ export type RenderStatus =
   | "render_error"
   | "missing_url";
 
+export type EvidenceStatus =
+  | "live_rendered"
+  | "live_parsed"
+  | "empty_live"
+  | "cached_snapshot_fallback"
+  | "fixture_fallback"
+  | "unavailable"
+  | "error";
+
+export interface WitnessEvidence {
+  sourceKey: string;
+  evidenceStatus: EvidenceStatus;
+  isLive: boolean;
+  isFallback: boolean;
+  isRenderable: boolean;
+  recordCount?: number | null;
+  latestTimestamp?: string | null;
+  observedAt?: string | null;
+  reason?: string | null;
+}
+
 export interface SolarImageRenderWitness {
   status: RenderStatus;
   naturalWidth: number | null;
@@ -87,8 +108,14 @@ export interface SolarImageWitness {
   metadataStatus: SourceStatus;
   imageFetchStatus: SourceStatus;
   renderStatus: RenderStatus;
+  evidenceStatus: EvidenceStatus;
+  isLiveImage: boolean;
+  isFallbackImage: boolean;
+  fallbackReason?: string | null;
+  attemptedUrls: string[];
+  selectedUrl?: string | null;
   error?: string | null;
-  source: "HELIOVIEWER" | "FIXTURE";
+  source: "HELIOVIEWER" | "FIXTURE" | "CACHE";
 }
 
 export interface SourceResult<T> {

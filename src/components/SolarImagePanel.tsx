@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { SyntheticEvent } from "react";
 import type {
+  EvidenceStatus,
   RenderStatus,
   SolarImageRenderWitness,
   SolarImageWitness
@@ -41,6 +42,25 @@ function initialRenderWitness(
   }
 
   return renderWitness(witness.renderStatus ?? "not_attempted", witness.error ?? null);
+}
+
+function displayEvidenceStatus(
+  witness: SolarImageWitness | null,
+  renderState: SolarImageRenderWitness
+): EvidenceStatus {
+  if (!witness) {
+    return "unavailable";
+  }
+
+  if (renderState.status === "render_error") {
+    return "error";
+  }
+
+  if (renderState.status === "rendered" && witness.isLiveImage) {
+    return "live_rendered";
+  }
+
+  return witness.evidenceStatus;
 }
 
 export function SolarImagePanel({
@@ -107,9 +127,12 @@ export function SolarImagePanel({
   const imageFetchStatus = imageUrl
     ? witness?.imageFetchStatus ?? "unavailable"
     : "unavailable";
+  const evidenceStatus = displayEvidenceStatus(witness, renderState);
   const renderMessage =
-    renderState.status === "rendered"
-      ? "Solar image render witness preserved."
+    renderState.status === "rendered" && witness?.isLiveImage
+      ? "Live solar image witness rendered."
+      : renderState.status === "rendered" && witness?.isFallbackImage
+        ? "Rendered fallback snapshot; live solar image witness remains unclosed."
       : renderState.status === "render_error"
         ? "Solar image URL failed browser render."
         : renderState.status === "loading" && loadingOverdue
@@ -183,6 +206,7 @@ export function SolarImagePanel({
         <WitnessSourceBadge status={metadataStatus} label="METADATA FETCH" />
         <WitnessSourceBadge status={imageFetchStatus} label="IMAGE FETCH" />
         <WitnessSourceBadge status={renderState.status} label="BROWSER RENDER" />
+        <WitnessSourceBadge status={evidenceStatus} label="EVIDENCE" />
       </div>
 
       {imageUrl ? (
@@ -206,6 +230,12 @@ export function SolarImagePanel({
           className={`render-witness-message render-witness-message--${renderState.status}`}
         >
           {renderMessage}
+        </p>
+      ) : null}
+
+      {renderState.status === "rendered" && witness?.isFallbackImage ? (
+        <p className="fallback-warning">
+          Fallback solar snapshot rendered. Live solar image witness is not resolved.
         </p>
       ) : null}
 
@@ -245,6 +275,35 @@ export function SolarImagePanel({
           {renderState.error ? <p>{renderState.error}</p> : null}
         </details>
       ) : null}
+
+      <dl className="solar-image-meta">
+        <div>
+          <dt>timestamp</dt>
+          <dd>{formatUtcTimestamp(witness?.timestamp)}</dd>
+        </div>
+        <div>
+          <dt>selected URL</dt>
+          <dd>{witness?.selectedUrl ?? imageUrl ?? "missing_url"}</dd>
+        </div>
+        <div>
+          <dt>attempted URL count</dt>
+          <dd>{witness?.attemptedUrls?.length ?? 0}</dd>
+        </div>
+        <div>
+          <dt>natural size</dt>
+          <dd>
+            {renderState.naturalWidth && renderState.naturalHeight
+              ? `${renderState.naturalWidth} x ${renderState.naturalHeight}`
+              : "unobserved"}
+          </dd>
+        </div>
+        {witness?.fallbackReason ? (
+          <div>
+            <dt>fallback reason</dt>
+            <dd>{witness.fallbackReason}</dd>
+          </div>
+        ) : null}
+      </dl>
     </section>
   );
 }

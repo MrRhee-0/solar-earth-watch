@@ -3,6 +3,7 @@ import { fetchDonkiEvents } from "../data/clients/donkiClient";
 import { fetchSolarImage } from "../data/clients/helioviewerClient";
 import { fetchKp, fetchMag, fetchPlasma } from "../data/clients/swpcClient";
 import type {
+  EvidenceStatus,
   EventWitness,
   KpPoint,
   MagPoint,
@@ -11,6 +12,7 @@ import type {
   SolarImageRenderWitness,
   SolarImageWitness,
   SourceStatus,
+  WitnessEvidence,
   WitnessSource
 } from "../data/types";
 import { EventTimeline } from "../components/EventTimeline";
@@ -103,6 +105,82 @@ function deriveImageUrlDiagnostics(imageUrl: string | null) {
     imageUrlBeginsWithApiHelioviewer: beginsWithApiHelioviewer,
     displayTruePresent: parsedUrl.searchParams.get("display") === "true",
     layersContainSdoAia171: layers.includes("SDO,AIA,AIA,171")
+  };
+}
+
+function solarEvidenceFromState(
+  solarImage: SolarImageWitness | null,
+  renderWitness: SolarImageRenderWitness
+): WitnessEvidence {
+  if (!solarImage) {
+    return {
+      sourceKey: "HELIOVIEWER",
+      evidenceStatus: "unavailable",
+      isLive: false,
+      isFallback: false,
+      isRenderable: false,
+      recordCount: 0,
+      latestTimestamp: null,
+      reason: "Solar image witness is unavailable."
+    };
+  }
+
+  const rendered =
+    renderWitness.status === "rendered" &&
+    (renderWitness.naturalWidth ?? 0) > 0 &&
+    (renderWitness.naturalHeight ?? 0) > 0;
+  const evidenceStatus: EvidenceStatus =
+    rendered && solarImage.isLiveImage
+      ? "live_rendered"
+      : renderWitness.status === "render_error"
+        ? "error"
+        : solarImage.evidenceStatus;
+
+  return {
+    sourceKey: "HELIOVIEWER",
+    evidenceStatus,
+    isLive: evidenceStatus === "live_rendered" || evidenceStatus === "live_parsed",
+    isFallback: solarImage.isFallbackImage,
+    isRenderable: rendered,
+    recordCount: solarImage.imageUrl ? 1 : 0,
+    latestTimestamp: solarImage.timestamp,
+    observedAt: renderWitness.observedAt,
+    reason:
+      renderWitness.error ??
+      solarImage.fallbackReason ??
+      solarImage.error ??
+      null
+  };
+}
+
+function evidenceFromRecords(
+  sourceKey: WitnessSource,
+  status: SourceStatus | undefined,
+  recordCount: number,
+  latestTimestamp: string | null,
+  hasFixtureRecords: boolean,
+  error?: string
+): WitnessEvidence {
+  const evidenceStatus: EvidenceStatus =
+    hasFixtureRecords || status === "fixture"
+      ? "fixture_fallback"
+      : status === "error"
+        ? "error"
+        : status === "live" && recordCount > 0
+          ? "live_parsed"
+          : status === "live"
+            ? "empty_live"
+            : "unavailable";
+
+  return {
+    sourceKey,
+    evidenceStatus,
+    isLive: evidenceStatus === "live_parsed" || evidenceStatus === "empty_live",
+    isFallback: evidenceStatus === "fixture_fallback",
+    isRenderable: false,
+    recordCount,
+    latestTimestamp,
+    reason: error ?? null
   };
 }
 
@@ -206,6 +284,45 @@ export function Dashboard() {
     [data.mag, data.plasma, selectedEvent]
   );
 
+  const witnessEvidence = useMemo(
+    () => [
+      solarEvidenceFromState(data.solarImage, solarImageRenderWitness),
+      evidenceFromRecords(
+        "NASA_DONKI",
+        data.status.NASA_DONKI,
+        data.events.length,
+        data.events[0]?.startTime ?? null,
+        data.status.NASA_DONKI === "fixture",
+        data.errors.NASA_DONKI
+      ),
+      evidenceFromRecords(
+        "NOAA_SWPC_SOLAR_WIND_PLASMA",
+        data.status.NOAA_SWPC_SOLAR_WIND_PLASMA,
+        data.plasma.length,
+        data.plasma[data.plasma.length - 1]?.timeTag ?? null,
+        data.plasma.some((point) => point.source === "FIXTURE"),
+        data.errors.NOAA_SWPC_SOLAR_WIND_PLASMA
+      ),
+      evidenceFromRecords(
+        "NOAA_SWPC_SOLAR_WIND_MAG",
+        data.status.NOAA_SWPC_SOLAR_WIND_MAG,
+        data.mag.length,
+        data.mag[data.mag.length - 1]?.timeTag ?? null,
+        data.mag.some((point) => point.source === "FIXTURE"),
+        data.errors.NOAA_SWPC_SOLAR_WIND_MAG
+      ),
+      evidenceFromRecords(
+        "NOAA_SWPC_KP",
+        data.status.NOAA_SWPC_KP,
+        data.kp.length,
+        data.kp[data.kp.length - 1]?.timeTag ?? null,
+        data.kp.some((point) => point.source === "FIXTURE"),
+        data.errors.NOAA_SWPC_KP
+      )
+    ],
+    [data, solarImageRenderWitness]
+  );
+
   const packet = useMemo(
     () =>
       classifyPacketStatus({
@@ -219,9 +336,10 @@ export function Dashboard() {
         eventCandidates: data.events,
         selectedEventIsExplicit,
         solarImageRenderWitness,
+        witnessEvidence,
         representationSurfaceResolved: true
       }),
-    [data, selectedEvent, selectedEventIsExplicit, solarImageRenderWitness]
+    [data, selectedEvent, selectedEventIsExplicit, solarImageRenderWitness, witnessEvidence]
   );
 
   const diagnostics = useMemo(
@@ -239,8 +357,16 @@ export function Dashboard() {
           data.status.HELIOVIEWER ??
           "unavailable",
         helioviewerRenderStatus: solarImageRenderWitness.status,
+        helioviewerEvidenceStatus:
+          witnessEvidence.find((entry) => entry.sourceKey === "HELIOVIEWER")
+            ?.evidenceStatus ?? "unavailable",
         imageUrl,
         proxiedImageUrl: imageUrl,
+        selectedUrl: data.solarImage?.selectedUrl ?? null,
+        attemptedUrlCount: data.solarImage?.attemptedUrls?.length ?? 0,
+        fallbackReason: data.solarImage?.fallbackReason ?? null,
+        isLiveImage: Boolean(data.solarImage?.isLiveImage),
+        isFallbackImage: Boolean(data.solarImage?.isFallbackImage),
         naturalWidth: solarImageRenderWitness.naturalWidth,
         naturalHeight: solarImageRenderWitness.naturalHeight,
         clientWidth: solarImageRenderWitness.clientWidth,
@@ -264,7 +390,8 @@ export function Dashboard() {
       data.solarImage,
       data.status,
       selectedEventId,
-      solarImageRenderWitness
+      solarImageRenderWitness,
+      witnessEvidence
     ]
   );
 

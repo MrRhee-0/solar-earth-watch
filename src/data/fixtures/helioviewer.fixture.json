@@ -8,6 +8,12 @@
   "metadataStatus": "fixture",
   "imageFetchStatus": "fixture",
   "renderStatus": "not_attempted",
+  "evidenceStatus": "fixture_fallback",
+  "isLiveImage": false,
+  "isFallbackImage": true,
+  "fallbackReason": "fixture fallback active: live Helioviewer screenshot attempts did not produce a validated image.",
+  "attemptedUrls": [],
+  "selectedUrl": "/api/helioviewer/v2/takeScreenshot/?date=2026-06-15T01%3A39%3A00Z&imageScale=2.4204409&layers=%5BSDO%2CAIA%2CAIA%2C171%2C1%2C100%5D&events=&eventLabels=false&scale=true&scaleType=earth&scaleX=0&scaleY=0&x1=-1228.8&x2=1228.8&y1=-1228.8&y2=1228.8&display=true&watermark=true",
   "error": null,
   "source": "FIXTURE"
 }

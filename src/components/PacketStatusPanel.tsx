@@ -1,12 +1,18 @@
-import type { RenderStatus, SourceStatus } from "../data/types";
+import type { EvidenceStatus, RenderStatus, SourceStatus } from "../data/types";
 import type { TctPacketStatus } from "../tct/packetTypes";
 
 export interface SourceDiagnostics {
   helioviewerMetadataStatus: SourceStatus;
   helioviewerImageFetchStatus: SourceStatus;
   helioviewerRenderStatus: RenderStatus;
+  helioviewerEvidenceStatus: EvidenceStatus;
   imageUrl: string | null;
   proxiedImageUrl: string | null;
+  selectedUrl: string | null;
+  attemptedUrlCount: number;
+  fallbackReason: string | null;
+  isLiveImage: boolean;
+  isFallbackImage: boolean;
   remoteHelioviewerEndpointPath: string | null;
   imageUrlBeginsWithApiHelioviewer: boolean;
   displayTruePresent: boolean;
@@ -33,7 +39,11 @@ interface PacketStatusPanelProps {
 }
 
 function StatusPill({ value }: { value: string }) {
-  return <span className={`packet-status packet-status--${value}`}>{value}</span>;
+  return (
+    <span className={`packet-status packet-status--${value} source-badge--${value}`}>
+      {value}
+    </span>
+  );
 }
 
 function diagnosticRows(diagnostics: SourceDiagnostics) {
@@ -41,8 +51,14 @@ function diagnosticRows(diagnostics: SourceDiagnostics) {
     ["Helioviewer metadata status", diagnostics.helioviewerMetadataStatus],
     ["Helioviewer image URL status", diagnostics.helioviewerImageFetchStatus],
     ["Helioviewer render status", diagnostics.helioviewerRenderStatus],
+    ["Helioviewer evidence status", diagnostics.helioviewerEvidenceStatus],
     ["imageUrl", diagnostics.imageUrl ?? "missing_url"],
     ["Proxied image URL", diagnostics.proxiedImageUrl ?? "missing_url"],
+    ["selected URL", diagnostics.selectedUrl ?? "missing_url"],
+    ["attempted URL count", String(diagnostics.attemptedUrlCount)],
+    ["fallback reason", diagnostics.fallbackReason ?? "none"],
+    ["displayed image is live", String(diagnostics.isLiveImage)],
+    ["displayed image is fallback", String(diagnostics.isFallbackImage)],
     [
       "Remote Helioviewer endpoint path",
       diagnostics.remoteHelioviewerEndpointPath ?? "unavailable"
@@ -140,6 +156,13 @@ export function PacketStatusPanel({ packet, diagnostics }: PacketStatusPanelProp
         <p>Resolved representation does not imply resolved witness packet.</p>
       </div>
 
+      <div className="packet-help">
+        <strong>Why do witnesses say frontier_preserved?</strong>
+        <p>
+          The source witness is present, but the selected solar-to-Earth packet is not closure-sufficient yet. Resolved requires a selected event X, live witness surfaces, no fallback substitution, and carrier-window alignment.
+        </p>
+      </div>
+
       <div className="packet-block">
         <span>status reasons</span>
         <ul>
@@ -163,18 +186,24 @@ export function PacketStatusPanel({ packet, diagnostics }: PacketStatusPanelProp
 
       <div className="witness-table" role="table" aria-label="Witness role table">
         <div role="row" className="witness-table__head">
-          <span role="columnheader">label</span>
-          <span role="columnheader">source</span>
-          <span role="columnheader">role</span>
-          <span role="columnheader">status</span>
+          <span role="columnheader">Witness</span>
+          <span role="columnheader">Source fetch</span>
+          <span role="columnheader">Evidence</span>
+          <span role="columnheader">TCT role</span>
+          <span role="columnheader">TCT closure</span>
         </div>
         {packet.witnessRoles.map((row) => (
           <div role="row" key={`${row.label}-${row.role}`} className="witness-table__row">
             <span role="cell">{row.label}</span>
-            <span role="cell">{row.source}</span>
+            <span role="cell">
+              <StatusPill value={row.sourceFetch} />
+            </span>
+            <span role="cell">
+              <StatusPill value={row.evidence} />
+            </span>
             <span role="cell">{row.role}</span>
             <span role="cell">
-              <StatusPill value={row.status} />
+              <StatusPill value={row.closure} />
             </span>
           </div>
         ))}
