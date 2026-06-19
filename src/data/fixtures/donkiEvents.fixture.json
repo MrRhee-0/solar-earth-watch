@@ -1,0 +1,49 @@
+{
+  "FLR": [
+    {
+      "flrID": "2026-06-15T01:22:00-FLR-FIXTURE",
+      "beginTime": "2026-06-15T01:22Z",
+      "peakTime": "2026-06-15T01:39Z",
+      "endTime": "2026-06-15T01:51Z",
+      "classType": "M1.2",
+      "sourceLocation": "N14E32",
+      "activeRegionNum": 14211,
+      "linkedEvents": [{ "activityID": "2026-06-15T02:06:00-CME-FIXTURE" }],
+      "instruments": [{ "displayName": "GOES" }, { "displayName": "SDO/AIA" }]
+    }
+  ],
+  "CME": [
+    {
+      "activityID": "2026-06-15T02:06:00-CME-FIXTURE",
+      "startTime": "2026-06-15T02:06Z",
+      "sourceLocation": "N14E32",
+      "catalog": "DONKI",
+      "linkedEvents": [{ "activityID": "2026-06-15T01:22:00-FLR-FIXTURE" }],
+      "instruments": [{ "displayName": "SOHO/LASCO" }]
+    }
+  ],
+  "GST": [
+    {
+      "gstID": "2026-06-16T09:00:00-GST-FIXTURE",
+      "startTime": "2026-06-16T09:00Z",
+      "linkedEvents": [{ "activityID": "2026-06-15T02:06:00-CME-FIXTURE" }],
+      "allKpIndex": [{ "kpIndex": 4.0, "observedTime": "2026-06-16T09:00Z" }]
+    }
+  ],
+  "HSS": [
+    {
+      "hssID": "2026-06-14T18:00:00-HSS-FIXTURE",
+      "eventTime": "2026-06-14T18:00Z",
+      "instruments": [{ "displayName": "DSCOVR" }]
+    }
+  ],
+  "IPS": [
+    {
+      "ipsID": "2026-06-15T04:18:00-IPS-FIXTURE",
+      "eventTime": "2026-06-15T04:18Z",
+      "sourceLocation": "N14E32",
+      "linkedEvents": [{ "activityID": "2026-06-15T02:06:00-CME-FIXTURE" }]
+    }
+  ],
+  "SEP": []
+}
