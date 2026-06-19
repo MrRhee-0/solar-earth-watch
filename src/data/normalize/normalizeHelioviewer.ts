@@ -6,6 +6,7 @@ export interface HelioviewerConfig {
   instrument: string;
   measurement: string;
   screenshotLayers: string;
+  apiBasePath: string;
 }
 
 export const HELIOVIEWER_CONFIG: HelioviewerConfig = {
@@ -13,7 +14,8 @@ export const HELIOVIEWER_CONFIG: HelioviewerConfig = {
   observatory: "SDO",
   instrument: "AIA",
   measurement: "171",
-  screenshotLayers: "[SDO,AIA,AIA,171,1,100]"
+  screenshotLayers: "[SDO,AIA,AIA,171,1,100]",
+  apiBasePath: "/api/helioviewer/v2"
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -36,18 +38,36 @@ export function buildHelioviewerScreenshotUrl(
     date: timestamp,
     imageScale: "2.4204409",
     layers: config.screenshotLayers,
-    x0: "0",
-    y0: "0",
-    width: "1024",
-    height: "1024",
+    events: "",
+    eventLabels: "false",
+    scale: "true",
+    scaleType: "earth",
+    scaleX: "0",
+    scaleY: "0",
+    x1: "-1228.8",
+    x2: "1228.8",
+    y1: "-1228.8",
+    y2: "1228.8",
     display: "true",
-    watermark: "false"
+    watermark: "true"
   });
 
-  return `https://api.helioviewer.org/v2/takeScreenshot/?${params.toString()}`;
+  return `${config.apiBasePath}/takeScreenshot/?${params.toString()}`;
 }
 
-export function normalizeHelioviewer(
+export function buildHelioviewerClosestImageUrl(
+  timestamp: string,
+  config = HELIOVIEWER_CONFIG
+): string {
+  const params = new URLSearchParams({
+    date: timestamp,
+    sourceId: String(config.sourceId)
+  });
+
+  return `${config.apiBasePath}/getClosestImage/?${params.toString()}`;
+}
+
+export function normalizeHelioviewerMetadata(
   data: unknown,
   config = HELIOVIEWER_CONFIG
 ): SolarImageWitness {
@@ -56,12 +76,23 @@ export function normalizeHelioviewer(
     : new Date().toISOString();
 
   return {
-    imageUrl: buildHelioviewerScreenshotUrl(timestamp, config),
+    imageUrl: null,
     timestamp,
     sourceId: config.sourceId,
     observatory: config.observatory,
     instrument: config.instrument,
     measurement: config.measurement,
+    metadataStatus: "live",
+    imageFetchStatus: "unavailable",
+    renderStatus: "not_attempted",
+    error: null,
     source: "HELIOVIEWER"
   };
+}
+
+export function normalizeHelioviewer(
+  data: unknown,
+  config = HELIOVIEWER_CONFIG
+): SolarImageWitness {
+  return normalizeHelioviewerMetadata(data, config);
 }

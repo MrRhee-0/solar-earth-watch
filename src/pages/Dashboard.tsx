@@ -7,6 +7,7 @@ import type {
   KpPoint,
   MagPoint,
   PlasmaPoint,
+  RenderStatus,
   SolarImageWitness,
   SourceStatus,
   WitnessSource
@@ -21,6 +22,7 @@ import { PacketStatusPanel } from "../components/PacketStatusPanel";
 import { SolarImagePanel } from "../components/SolarImagePanel";
 import { SolarWindChart } from "../components/SolarWindChart";
 import { classifyPacketStatus } from "../tct/classifyPacketStatus";
+import { carrierWindowForEvent, hasCarrierAlignment } from "../tct/alignment";
 import { parseUtcTime } from "../utils/dateRange";
 
 type StatusMap = Partial<Record<WitnessSource, SourceStatus>>;
@@ -68,6 +70,8 @@ export function Dashboard() {
   const [data, setData] = useState<DashboardData>(EMPTY_DATA);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [selectedEventIsExplicit, setSelectedEventIsExplicit] = useState(false);
+  const [solarImageRenderStatus, setSolarImageRenderStatus] =
+    useState<RenderStatus>("not_attempted");
   const [loading, setLoading] = useState(false);
 
   const loadWitnesses = useCallback(async () => {
@@ -104,6 +108,11 @@ export function Dashboard() {
         },
         refreshedAt: new Date().toISOString()
       });
+      setSolarImageRenderStatus(
+        solarImage.data?.imageUrl
+          ? solarImage.data.renderStatus ?? "not_attempted"
+          : "missing_url"
+      );
     } finally {
       setLoading(false);
     }
@@ -131,6 +140,16 @@ export function Dashboard() {
     [data.events, selectedEventId]
   );
 
+  const carrierWindow = useMemo(
+    () => carrierWindowForEvent(selectedEvent),
+    [selectedEvent]
+  );
+
+  const alignmentPassed = useMemo(
+    () => hasCarrierAlignment(selectedEvent, data.plasma, data.mag),
+    [data.mag, data.plasma, selectedEvent]
+  );
+
   const packet = useMemo(
     () =>
       classifyPacketStatus({
@@ -142,9 +161,38 @@ export function Dashboard() {
         sourceStatus: data.status,
         sourceErrors: data.errors,
         eventCandidates: data.events,
-        selectedEventIsExplicit
+        selectedEventIsExplicit,
+        solarImageRenderStatus,
+        representationSurfaceResolved: true
       }),
-    [data, selectedEvent, selectedEventIsExplicit]
+    [data, selectedEvent, selectedEventIsExplicit, solarImageRenderStatus]
+  );
+
+  const diagnostics = useMemo(
+    () => ({
+      helioviewerMetadataStatus:
+        data.solarImage?.metadataStatus ?? data.status.HELIOVIEWER ?? "unavailable",
+      helioviewerImageFetchStatus:
+        data.solarImage?.imageFetchStatus ?? data.status.HELIOVIEWER ?? "unavailable",
+      helioviewerRenderStatus: solarImageRenderStatus,
+      imageUrl: data.solarImage?.imageUrl ?? null,
+      donkiStatus: data.status.NASA_DONKI ?? "unavailable",
+      plasmaStatus: data.status.NOAA_SWPC_SOLAR_WIND_PLASMA ?? "unavailable",
+      magStatus: data.status.NOAA_SWPC_SOLAR_WIND_MAG ?? "unavailable",
+      kpStatus: data.status.NOAA_SWPC_KP ?? "unavailable",
+      selectedEventId,
+      alignmentPassed,
+      carrierWindowStart: carrierWindow?.start.toISOString() ?? null,
+      carrierWindowEnd: carrierWindow?.end.toISOString() ?? null
+    }),
+    [
+      alignmentPassed,
+      carrierWindow,
+      data.solarImage,
+      data.status,
+      selectedEventId,
+      solarImageRenderStatus
+    ]
   );
 
   const selectEvent = (eventId: string) => {
@@ -166,8 +214,8 @@ export function Dashboard() {
         <>
           <div className="dashboard-grid dashboard-grid--top">
             <SolarImagePanel
-              image={data.solarImage}
-              status={data.status.HELIOVIEWER ?? "unavailable"}
+              witness={data.solarImage}
+              onRenderStatusChange={setSolarImageRenderStatus}
             />
             <EventTimeline
               events={data.events}
@@ -175,7 +223,7 @@ export function Dashboard() {
               status={data.status.NASA_DONKI ?? "unavailable"}
               onSelect={selectEvent}
             />
-            <PacketStatusPanel packet={packet} />
+            <PacketStatusPanel packet={packet} diagnostics={diagnostics} />
           </div>
 
           <div className="dashboard-grid dashboard-grid--bottom">

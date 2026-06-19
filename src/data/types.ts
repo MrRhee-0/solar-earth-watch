@@ -12,6 +12,13 @@ export type SourceStatus =
   | "unavailable"
   | "error";
 
+export type RenderStatus =
+  | "not_attempted"
+  | "loading"
+  | "rendered"
+  | "render_error"
+  | "missing_url";
+
 export type EventType =
   | "FLR"
   | "CME"
@@ -67,6 +74,10 @@ export interface SolarImageWitness {
   observatory: string | null;
   instrument: string | null;
   measurement: string | null;
+  metadataStatus: SourceStatus;
+  imageFetchStatus: SourceStatus;
+  renderStatus: RenderStatus;
+  error?: string | null;
   source: "HELIOVIEWER" | "FIXTURE";
 }
 

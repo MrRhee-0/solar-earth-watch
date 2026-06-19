@@ -1,7 +1,7 @@
-import type { SourceStatus } from "../data/types";
+import type { RenderStatus, SourceStatus } from "../data/types";
 
 interface WitnessSourceBadgeProps {
-  status: SourceStatus;
+  status: SourceStatus | RenderStatus;
   label?: string;
 }
 

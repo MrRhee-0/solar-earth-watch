@@ -73,6 +73,10 @@ vi.mock("./data/clients/helioviewerClient", () => ({
       observatory: "SDO",
       instrument: "AIA",
       measurement: "171",
+      metadataStatus: "live",
+      imageFetchStatus: "live",
+      renderStatus: "not_attempted",
+      error: null,
       source: "HELIOVIEWER"
     }
   }))

@@ -1,9 +1,13 @@
 {
-  "imageUrl": "https://api.helioviewer.org/v2/takeScreenshot/?date=2026-06-15T01%3A39%3A00Z&imageScale=2.4204409&layers=%5BSDO%2CAIA%2CAIA%2C171%2C1%2C100%5D&x0=0&y0=0&width=1024&height=1024&display=true&watermark=false",
+  "imageUrl": "/api/helioviewer/v2/takeScreenshot/?date=2026-06-15T01%3A39%3A00Z&imageScale=2.4204409&layers=%5BSDO%2CAIA%2CAIA%2C171%2C1%2C100%5D&events=&eventLabels=false&scale=true&scaleType=earth&scaleX=0&scaleY=0&x1=-1228.8&x2=1228.8&y1=-1228.8&y2=1228.8&display=true&watermark=true",
   "timestamp": "2026-06-15T01:39:00Z",
   "sourceId": 10,
   "observatory": "SDO",
   "instrument": "AIA",
   "measurement": "171",
+  "metadataStatus": "fixture",
+  "imageFetchStatus": "fixture",
+  "renderStatus": "not_attempted",
+  "error": null,
   "source": "FIXTURE"
 }

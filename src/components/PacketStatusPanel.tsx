@@ -1,14 +1,55 @@
+import type { RenderStatus, SourceStatus } from "../data/types";
 import type { TctPacketStatus } from "../tct/packetTypes";
+
+export interface SourceDiagnostics {
+  helioviewerMetadataStatus: SourceStatus;
+  helioviewerImageFetchStatus: SourceStatus;
+  helioviewerRenderStatus: RenderStatus;
+  imageUrl: string | null;
+  donkiStatus: SourceStatus;
+  plasmaStatus: SourceStatus;
+  magStatus: SourceStatus;
+  kpStatus: SourceStatus;
+  selectedEventId: string | null;
+  alignmentPassed: boolean;
+  carrierWindowStart: string | null;
+  carrierWindowEnd: string | null;
+}
 
 interface PacketStatusPanelProps {
   packet: TctPacketStatus;
+  diagnostics: SourceDiagnostics;
 }
 
 function StatusPill({ value }: { value: string }) {
   return <span className={`packet-status packet-status--${value}`}>{value}</span>;
 }
 
-export function PacketStatusPanel({ packet }: PacketStatusPanelProps) {
+function diagnosticRows(diagnostics: SourceDiagnostics) {
+  return [
+    ["Helioviewer metadata status", diagnostics.helioviewerMetadataStatus],
+    ["Helioviewer image URL status", diagnostics.helioviewerImageFetchStatus],
+    ["Helioviewer render status", diagnostics.helioviewerRenderStatus],
+    ["imageUrl", diagnostics.imageUrl ?? "missing_url"],
+    ["DONKI status", diagnostics.donkiStatus],
+    ["SWPC plasma status", diagnostics.plasmaStatus],
+    ["SWPC mag status", diagnostics.magStatus],
+    ["Kp status", diagnostics.kpStatus],
+    ["selected event id", diagnostics.selectedEventId ?? "not selected"],
+    ["alignment passed", String(diagnostics.alignmentPassed)],
+    ["carrier window start", diagnostics.carrierWindowStart ?? "unavailable"],
+    ["carrier window end", diagnostics.carrierWindowEnd ?? "unavailable"]
+  ] as const;
+}
+
+export function PacketStatusPanel({ packet, diagnostics }: PacketStatusPanelProps) {
+  const statusReasons =
+    packet.statusReasons.length > 0
+      ? packet.statusReasons
+      : packet.measurementClosure === "resolved"
+        ? ["packet closure resolved."]
+        : [`${packet.measurementClosure}: packet closure reason unavailable.`];
+
   return (
     <section className="panel packet-panel">
       <div className="panel-heading">
@@ -58,18 +99,36 @@ export function PacketStatusPanel({ packet }: PacketStatusPanelProps) {
       </div>
 
       <div className="packet-block">
-        <span>Θ_meas(X)</span>
+        <span>Θ_meas(X) packet closure</span>
         <StatusPill value={packet.measurementClosure} />
+      </div>
+
+      <div className="packet-block packet-block--surface">
+        <span>Representation surface</span>
+        <StatusPill value={packet.representationSurfaceStatus} />
+        <p>Resolved representation does not imply resolved witness packet.</p>
       </div>
 
       <div className="packet-block">
         <span>status reasons</span>
         <ul>
-          {packet.statusReasons.map((reason) => (
+          {statusReasons.map((reason) => (
             <li key={reason}>{reason}</li>
           ))}
         </ul>
       </div>
+
+      <details className="packet-diagnostics">
+        <summary>Source diagnostics</summary>
+        <dl>
+          {diagnosticRows(diagnostics).map(([label, value]) => (
+            <div key={label}>
+              <dt>{label}</dt>
+              <dd>{value}</dd>
+            </div>
+          ))}
+        </dl>
+      </details>
 
       <div className="witness-table" role="table" aria-label="Witness role table">
         <div role="row" className="witness-table__head">

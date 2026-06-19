@@ -23,6 +23,10 @@ const image: SolarImageWitness = {
   observatory: "SDO",
   instrument: "AIA",
   measurement: "171",
+  metadataStatus: "live",
+  imageFetchStatus: "live",
+  renderStatus: "rendered",
+  error: null,
   source: "HELIOVIEWER"
 };
 
@@ -73,14 +77,91 @@ describe("classifyPacketStatus", () => {
       plasma,
       mag,
       kp,
-      sourceStatus: liveStatus
+      sourceStatus: liveStatus,
+      solarImageRenderStatus: "rendered"
     });
 
     expect(packet.measurementClosure).toBe("underdeclared");
     expect(packet.statusReasons).toContain("No selected solar event packet X.");
   });
 
-  it("claims resolved only when all witnesses exist and alignment passes without fixtures", () => {
+  it("does not resolve when the selected event has no solar image URL", () => {
+    const packet = classifyPacketStatus({
+      selectedEvent: event,
+      solarImage: { ...image, imageUrl: null, renderStatus: "missing_url" },
+      plasma,
+      mag,
+      kp,
+      sourceStatus: liveStatus,
+      selectedEventIsExplicit: true,
+      eventCandidates: [event],
+      solarImageRenderStatus: "missing_url"
+    });
+
+    expect(packet.measurementClosure).toBe("unavailable_witness");
+    expect(packet.statusReasons).toContain(
+      "Solar image witness has no renderable image URL."
+    );
+    expect(
+      packet.witnessRoles.find((row) => row.label === "solar image witness")?.status
+    ).toBe("unavailable_witness");
+  });
+
+  it("does not resolve when the solar image URL fails browser render", () => {
+    const packet = classifyPacketStatus({
+      selectedEvent: event,
+      solarImage: { ...image, renderStatus: "render_error" },
+      plasma,
+      mag,
+      kp,
+      sourceStatus: liveStatus,
+      selectedEventIsExplicit: true,
+      eventCandidates: [event],
+      solarImageRenderStatus: "render_error"
+    });
+
+    expect(packet.measurementClosure).toBe("unavailable_witness");
+    expect(packet.statusReasons).toContain(
+      "Solar image URL failed browser render."
+    );
+    expect(
+      packet.witnessRoles.find((row) => row.label === "solar image witness")?.status
+    ).toBe("unavailable_witness");
+  });
+
+  it("keeps the frontier when required witnesses exist but alignment is not proven", () => {
+    const latePlasma: PlasmaPoint[] = [
+      {
+        ...plasma[0],
+        timeTag: "2026-06-20T06:00:00Z"
+      }
+    ];
+    const lateMag: MagPoint[] = [
+      {
+        ...mag[0],
+        timeTag: "2026-06-20T06:00:00Z"
+      }
+    ];
+
+    const packet = classifyPacketStatus({
+      selectedEvent: event,
+      solarImage: image,
+      plasma: latePlasma,
+      mag: lateMag,
+      kp,
+      sourceStatus: liveStatus,
+      selectedEventIsExplicit: true,
+      eventCandidates: [event],
+      solarImageRenderStatus: "rendered"
+    });
+
+    expect(packet.measurementClosure).toBe("frontier_preserved");
+    expect(packet.statusReasons).toContain(
+      "Required witnesses exist, but event-carrier alignment is not yet closure-sufficient."
+    );
+  });
+
+  it("claims resolved only when all witnesses render and alignment passes without fixtures", () => {
     const packet = classifyPacketStatus({
       selectedEvent: event,
       solarImage: image,
@@ -89,16 +170,25 @@ describe("classifyPacketStatus", () => {
       kp,
       sourceStatus: liveStatus,
       selectedEventIsExplicit: true,
-      eventCandidates: [event]
+      eventCandidates: [event],
+      solarImageRenderStatus: "rendered"
     });
 
     expect(packet.measurementClosure).toBe("resolved");
+    expect(packet.statusReasons).toContain(
+      "packet closure resolved: selected event, rendered solar image witness, L1 plasma, L1 magnetometer, Kp marker, and carrier-window alignment are present."
+    );
   });
 
   it("preserves fixture fallback as non-closure", () => {
     const packet = classifyPacketStatus({
       selectedEvent: event,
-      solarImage: { ...image, source: "FIXTURE" },
+      solarImage: {
+        ...image,
+        source: "FIXTURE",
+        metadataStatus: "fixture",
+        imageFetchStatus: "fixture"
+      },
       plasma: plasma.map((point) => ({ ...point, source: "FIXTURE" })),
       mag,
       kp,
@@ -108,7 +198,8 @@ describe("classifyPacketStatus", () => {
         NOAA_SWPC_SOLAR_WIND_PLASMA: "fixture"
       },
       selectedEventIsExplicit: true,
-      eventCandidates: [event]
+      eventCandidates: [event],
+      solarImageRenderStatus: "rendered"
     });
 
     expect(packet.measurementClosure).toBe("fixture_fallback_active");
@@ -129,9 +220,28 @@ describe("classifyPacketStatus", () => {
       kp,
       sourceStatus: liveStatus,
       eventCandidates: [event, overlapping],
-      selectedEventIsExplicit: false
+      selectedEventIsExplicit: false,
+      solarImageRenderStatus: "rendered"
     });
 
     expect(packet.measurementClosure).toBe("preservation_boundary_failure");
+  });
+
+  it("does not let a resolved representation surface force Θ_meas(X) resolved", () => {
+    const packet = classifyPacketStatus({
+      selectedEvent: event,
+      solarImage: { ...image, imageUrl: null, renderStatus: "missing_url" },
+      plasma,
+      mag,
+      kp,
+      sourceStatus: liveStatus,
+      selectedEventIsExplicit: true,
+      eventCandidates: [event],
+      solarImageRenderStatus: "missing_url",
+      representationSurfaceResolved: true
+    });
+
+    expect(packet.representationSurfaceStatus).toBe("resolved");
+    expect(packet.measurementClosure).not.toBe("resolved");
   });
 });

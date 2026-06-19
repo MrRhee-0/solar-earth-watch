@@ -52,7 +52,7 @@ npm run preview
 NOAA SWPC JSON products expose browser-readable CORS headers. DONKI and Helioviewer metadata can respond live at the HTTP layer while still withholding browser CORS headers, so v0.1 includes same-origin proxy routes for Vite dev and Vercel-style deployment:
 
 - `/proxy/donki/*` -> `https://kauai.ccmc.gsfc.nasa.gov/DONKI/WS/get/*`
-- `/proxy/helioviewer/*` -> `https://api.helioviewer.org/v2/*`
+- `/api/helioviewer/*` -> `https://api.helioviewer.org/*`
 
 If those proxy routes are unavailable in a static host, the affected witness is classified as `source_fetch_failure` and fixture fallback becomes active.
 

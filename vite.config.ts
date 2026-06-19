@@ -16,6 +16,12 @@ export default defineConfig({
         changeOrigin: true,
         secure: false,
         rewrite: (path) => path.replace(/^\/proxy\/helioviewer/, "/v2")
+      },
+      "/api/helioviewer": {
+        target: "https://api.helioviewer.org",
+        changeOrigin: true,
+        secure: false,
+        rewrite: (path) => path.replace(/^\/api\/helioviewer/, "")
       }
     }
   },

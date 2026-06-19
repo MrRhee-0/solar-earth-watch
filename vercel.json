@@ -7,6 +7,10 @@
     {
       "source": "/proxy/helioviewer/:path*",
       "destination": "https://api.helioviewer.org/v2/:path*"
+    },
+    {
+      "source": "/api/helioviewer/:path*",
+      "destination": "https://api.helioviewer.org/:path*"
     }
   ]
 }

@@ -158,7 +158,16 @@ button:disabled {
   background: currentColor;
 }
 
+.source-badge-stack {
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .source-badge--live,
+.source-badge--rendered,
 .packet-status--resolved {
   border-color: rgba(52, 211, 153, 0.62);
   background: rgba(6, 78, 59, 0.48);
@@ -166,6 +175,8 @@ button:disabled {
 }
 
 .source-badge--fixture,
+.source-badge--loading,
+.source-badge--not_attempted,
 .packet-status--fixture_fallback_active,
 .packet-status--frontier_preserved {
   border-color: rgba(250, 204, 21, 0.58);
@@ -174,6 +185,7 @@ button:disabled {
 }
 
 .source-badge--unavailable,
+.source-badge--missing_url,
 .packet-status--unavailable_witness,
 .packet-status--underdeclared,
 .packet-status--unresolved_carrier_alignment {
@@ -183,6 +195,7 @@ button:disabled {
 }
 
 .source-badge--error,
+.source-badge--render_error,
 .packet-status--source_fetch_failure,
 .packet-status--preservation_boundary_failure {
   border-color: rgba(248, 113, 113, 0.58);
@@ -211,6 +224,36 @@ button:disabled {
   margin-top: 10px;
   color: #aebfd3;
   font-size: 0.82rem;
+}
+
+.failure-classification {
+  margin: 10px 0 0;
+  color: #fecaca;
+  font-size: 0.82rem;
+  text-transform: uppercase;
+}
+
+.debug-details {
+  margin-top: 10px;
+  color: #cbd5e1;
+  font-size: 0.78rem;
+}
+
+.debug-details summary {
+  cursor: pointer;
+  color: #8fb6d9;
+}
+
+.debug-details code {
+  display: block;
+  margin-top: 8px;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  border: 1px solid #273449;
+  border-radius: 8px;
+  background: #07101d;
+  color: #e2e8f0;
+  padding: 8px;
 }
 
 .state {
@@ -434,6 +477,11 @@ button:disabled {
   color: #e2e8f0;
 }
 
+.packet-block--surface p {
+  color: #aebfd3;
+  font-size: 0.82rem;
+}
+
 .packet-block ul {
   padding-left: 18px;
 }
@@ -446,6 +494,48 @@ button:disabled {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
+}
+
+.packet-diagnostics {
+  margin-top: 14px;
+  border: 1px solid #273449;
+  border-radius: 8px;
+  background: #0f1a2b;
+  color: #d7e3f3;
+  padding: 10px;
+}
+
+.packet-diagnostics summary {
+  cursor: pointer;
+  color: #8fb6d9;
+  font-weight: 700;
+}
+
+.packet-diagnostics dl {
+  display: grid;
+  gap: 1px;
+  margin: 10px 0 0;
+}
+
+.packet-diagnostics div {
+  display: grid;
+  grid-template-columns: minmax(160px, 0.52fr) minmax(0, 1fr);
+  gap: 10px;
+  border-top: 1px solid rgba(99, 116, 139, 0.25);
+  padding: 7px 0;
+}
+
+.packet-diagnostics dt {
+  color: #9fb3c8;
+  font-size: 0.74rem;
+  text-transform: uppercase;
+}
+
+.packet-diagnostics dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: #e2e8f0;
+  font-size: 0.8rem;
 }
 
 .witness-table {

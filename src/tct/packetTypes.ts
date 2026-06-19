@@ -25,6 +25,7 @@ export interface TctPacketStatus {
   invariant: string[];
   preservationBoundary: string[];
   measurementClosure: PacketStatus;
+  representationSurfaceStatus: PacketStatus;
   statusReasons: string[];
   witnessRoles: Array<{
     label: string;
