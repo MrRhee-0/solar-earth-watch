@@ -1,4 +1,5 @@
 import type { EvidenceStatus, SourceStatus } from "../data/types";
+import type { EventCarrierAlignment } from "./alignment";
 
 export type PacketStatus =
   | "resolved"
@@ -28,6 +29,7 @@ export interface TctPacketStatus {
   preservationBoundary: string[];
   measurementClosure: PacketStatus;
   representationSurfaceStatus: PacketStatus;
+  alignment: EventCarrierAlignment;
   statusReasons: string[];
   witnessRoles: Array<{
     label: string;

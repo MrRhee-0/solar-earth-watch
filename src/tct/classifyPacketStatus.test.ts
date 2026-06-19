@@ -47,9 +47,16 @@ const image: SolarImageWitness = {
 
 const plasma: PlasmaPoint[] = [
   {
-    timeTag: "2026-06-15T06:00:00Z",
-    density: 6,
-    speed: 420,
+    timeTag: "2026-06-15T14:00:00Z",
+    density: 12,
+    speed: 660,
+    temperature: 210000,
+    source: "NOAA_SWPC_SOLAR_WIND_PLASMA"
+  },
+  {
+    timeTag: "2026-06-15T15:00:00Z",
+    density: 5,
+    speed: 430,
     temperature: 90000,
     source: "NOAA_SWPC_SOLAR_WIND_PLASMA"
   }
@@ -57,11 +64,31 @@ const plasma: PlasmaPoint[] = [
 
 const mag: MagPoint[] = [
   {
-    timeTag: "2026-06-15T06:00:00Z",
+    timeTag: "2026-06-15T14:00:00Z",
     bxGsm: 1,
     byGsm: 0,
-    bzGsm: -3,
-    bt: 4,
+    bzGsm: -11,
+    bt: 21,
+    latGsm: 2,
+    lonGsm: 300,
+    source: "NOAA_SWPC_SOLAR_WIND_MAG"
+  },
+  {
+    timeTag: "2026-06-15T14:05:00Z",
+    bxGsm: 1,
+    byGsm: 0,
+    bzGsm: -8,
+    bt: 16,
+    latGsm: 2,
+    lonGsm: 300,
+    source: "NOAA_SWPC_SOLAR_WIND_MAG"
+  },
+  {
+    timeTag: "2026-06-15T14:10:00Z",
+    bxGsm: 1,
+    byGsm: 0,
+    bzGsm: -6,
+    bt: 12,
     latGsm: 2,
     lonGsm: 300,
     source: "NOAA_SWPC_SOLAR_WIND_MAG"
@@ -70,8 +97,8 @@ const mag: MagPoint[] = [
 
 const kp: KpPoint[] = [
   {
-    timeTag: "2026-06-15T09:00:00Z",
-    kp: 3.33,
+    timeTag: "2026-06-15T18:00:00Z",
+    kp: 5,
     source: "NOAA_SWPC_KP"
   }
 ];
@@ -232,24 +259,27 @@ describe("classifyPacketStatus", () => {
   });
 
   it("keeps the frontier when required witnesses exist but alignment is not proven", () => {
-    const latePlasma: PlasmaPoint[] = [
+    const quietPlasma: PlasmaPoint[] = [
       {
         ...plasma[0],
-        timeTag: "2026-06-20T06:00:00Z"
+        density: 4,
+        speed: 360,
+        temperature: 80000
       }
     ];
-    const lateMag: MagPoint[] = [
+    const quietMag: MagPoint[] = [
       {
         ...mag[0],
-        timeTag: "2026-06-20T06:00:00Z"
+        bzGsm: 1,
+        bt: 3
       }
     ];
 
     const packet = classifyPacketStatus({
       selectedEvent: event,
       solarImage: image,
-      plasma: latePlasma,
-      mag: lateMag,
+      plasma: quietPlasma,
+      mag: quietMag,
       kp,
       sourceStatus: liveStatus,
       selectedEventIsExplicit: true,
@@ -263,7 +293,7 @@ describe("classifyPacketStatus", () => {
       "Solar image render witness observed with nonzero natural dimensions."
     );
     expect(packet.statusReasons).toContain(
-      "Required witnesses are present, but event-carrier alignment is not closure-sufficient."
+      "alignment.status: source_resolved_only."
     );
     expect(
       packet.witnessRoles.find((row) => row.label === "solar image witness")
@@ -324,7 +354,7 @@ describe("classifyPacketStatus", () => {
       "Solar image render witness observed with nonzero natural dimensions."
     );
     expect(packet.statusReasons).toContain(
-      "packet closure resolved: selected event, rendered solar image witness, L1 plasma, L1 magnetometer, Kp marker, and carrier-window alignment are present."
+      "packet closure resolved: selected event, rendered solar image witness, L1 plasma, L1 magnetometer, Kp marker, and event-carrier signature alignment are present."
     );
   });
 
@@ -377,7 +407,7 @@ describe("classifyPacketStatus", () => {
     const overlapping = {
       ...event,
       id: "X-002",
-      startTime: "2026-06-15T08:00:00Z"
+      startTime: "2026-06-15T15:00:00Z"
     };
 
     const packet = classifyPacketStatus({

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { SourceDiagnostics } from "./PacketStatusPanel";
 import { PacketStatusPanel } from "./PacketStatusPanel";
 import type { TctPacketStatus } from "../tct/packetTypes";
+import type { EventCarrierAlignment } from "../tct/alignment";
 
 const diagnostics: SourceDiagnostics = {
   helioviewerMetadataStatus: "live",
@@ -31,9 +32,28 @@ const diagnostics: SourceDiagnostics = {
   magStatus: "live",
   kpStatus: "live",
   selectedEventId: "X-001",
+  alignmentStatus: "source_resolved_only",
+  alignmentScore: 6,
   alignmentPassed: false,
   carrierWindowStart: "2026-06-19T16:00:00Z",
   carrierWindowEnd: "2026-06-23T16:00:00Z"
+};
+
+const alignment: EventCarrierAlignment = {
+  status: "source_resolved_only",
+  selectedEventId: "X-001",
+  eventType: "CME",
+  carrierWindow: {
+    start: "2026-06-19T16:00:00Z",
+    end: "2026-06-23T16:00:00Z",
+    reason:
+      "CME carrier effects are evaluated in a broad post-event transit window."
+  },
+  features: [],
+  blockingReasons: ["No plasma or magnetometer carrier disturbance feature is present."],
+  supportingReasons: ["Required source witnesses are live."],
+  alignmentScore: 6,
+  alignmentPassed: false
 };
 
 const packet: TctPacketStatus = {
@@ -44,8 +64,9 @@ const packet: TctPacketStatus = {
   preservationBoundary: ["do not claim closure from fixture data"],
   measurementClosure: "frontier_preserved",
   representationSurfaceStatus: "resolved",
+  alignment,
   statusReasons: [
-    "Required witnesses are present, but event-carrier alignment is not closure-sufficient."
+    "alignment.status: source_resolved_only."
   ],
   witnessRoles: [
     {
@@ -79,7 +100,7 @@ describe("PacketStatusPanel", () => {
       screen.getByText("Why do witnesses say frontier_preserved?")
     ).toBeInTheDocument();
     expect(
-      screen.getByText(/Resolved requires a selected event X/i)
+      screen.getByText(/Resolved requires live witnesses plus carrier-signature/i)
     ).toBeInTheDocument();
   });
 });

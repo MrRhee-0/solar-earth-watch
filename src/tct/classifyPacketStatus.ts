@@ -11,7 +11,11 @@ import type {
   WitnessEvidence,
   WitnessSource
 } from "../data/types";
-import { hasCarrierAlignment, overlappingEventCandidates } from "./alignment";
+import {
+  evaluateEventCarrierAlignment,
+  overlappingEventCandidates,
+  type EventCarrierAlignment
+} from "./alignment";
 import type { PacketStatus, TctPacketStatus } from "./packetTypes";
 import { witnessRole } from "./classifyWitness";
 
@@ -54,6 +58,7 @@ export interface ClassifyPacketInputs {
   selectedEventIsExplicit?: boolean;
   solarImageRenderWitness?: SolarImageRenderWitness;
   witnessEvidence?: WitnessEvidence[];
+  alignment?: EventCarrierAlignment;
   representationSurfaceResolved?: boolean;
 }
 
@@ -276,6 +281,7 @@ export function classifyPacketStatus({
   selectedEventIsExplicit = false,
   solarImageRenderWitness,
   witnessEvidence = [],
+  alignment: suppliedAlignment,
   representationSurfaceResolved = true
 }: ClassifyPacketInputs): TctPacketStatus {
   const statusReasons: string[] = [];
@@ -291,9 +297,6 @@ export function classifyPacketStatus({
   const hasPlasma = plasma.length > 0;
   const hasMag = mag.length > 0;
   const hasKp = kp.length > 0;
-  const alignmentPassed = selectedEvent
-    ? hasCarrierAlignment(selectedEvent, plasma, mag)
-    : false;
   const overlappingEvents = overlappingEventCandidates(selectedEvent, eventCandidates);
   const preservationBoundaryFails =
     overlappingEvents.length > 0 && !selectedEventIsExplicit;
@@ -362,6 +365,21 @@ export function classifyPacketStatus({
     magEvidence,
     kpEvidence
   ];
+  const alignment =
+    suppliedAlignment ??
+    evaluateEventCarrierAlignment({
+      selectedEvent,
+      plasma,
+      mag,
+      kp,
+      solarImageEvidence: solarEvidence,
+      donkiEvidence,
+      plasmaEvidence,
+      magEvidence,
+      kpEvidence,
+      eventCandidates,
+      selectedEventIsExplicit
+    });
   const fallbackEvidenceSources = requiredEvidence
     .filter(isFallbackEvidence)
     .map((evidence) => evidence.sourceKey);
@@ -439,18 +457,14 @@ export function classifyPacketStatus({
     );
   }
 
-  if (
-    selectedEvent &&
-    hasImageUrl &&
-    imageRendered &&
-    hasPlasma &&
-    hasMag &&
-    hasKp &&
-    !alignmentPassed
-  ) {
-    statusReasons.push(
-      "Required witnesses are present, but event-carrier alignment is not closure-sufficient."
-    );
+  statusReasons.push(`alignment.status: ${alignment.status}.`);
+
+  for (const reason of alignment.supportingReasons.slice(0, 4)) {
+    statusReasons.push(`alignment support: ${reason}`);
+  }
+
+  for (const reason of alignment.blockingReasons.slice(0, 4)) {
+    statusReasons.push(`alignment block: ${reason}`);
   }
 
   if (fixtureActive) {
@@ -481,18 +495,6 @@ export function classifyPacketStatus({
     plasmaEvidence.evidenceStatus === "live_parsed" &&
     magEvidence.evidenceStatus === "live_parsed" &&
     kpEvidence.evidenceStatus === "live_parsed";
-  const readyForResolved =
-    hasSelectedEvent &&
-    hasImageUrl &&
-    imageRendered &&
-    hasLiveRequiredEvidence &&
-    hasPlasma &&
-    hasMag &&
-    hasKp &&
-    alignmentPassed &&
-    !preservationBoundaryFails &&
-    !fixtureActive &&
-    !sourceFetchFailed;
 
   let measurementClosure: PacketStatus;
 
@@ -500,14 +502,26 @@ export function classifyPacketStatus({
     measurementClosure = "underdeclared";
   } else if (preservationBoundaryFails) {
     measurementClosure = "preservation_boundary_failure";
-  } else if (missingRequiredWitness) {
-    measurementClosure = "unavailable_witness";
   } else if (fixtureActive) {
     measurementClosure = "fixture_fallback_active";
   } else if (sourceFetchFailed) {
     measurementClosure = "source_fetch_failure";
-  } else if (readyForResolved) {
+  } else if (missingRequiredWitness) {
+    measurementClosure = "unavailable_witness";
+  } else if (alignment.status === "packet_resolved" && hasLiveRequiredEvidence) {
     measurementClosure = "resolved";
+  } else if (
+    alignment.status === "earth_response_candidate" ||
+    alignment.status === "carrier_signature_candidate" ||
+    alignment.status === "source_resolved_only"
+  ) {
+    measurementClosure = "frontier_preserved";
+  } else if (alignment.status === "unresolved_carrier_alignment") {
+    measurementClosure = "unresolved_carrier_alignment";
+  } else if (alignment.status === "preservation_boundary_failure") {
+    measurementClosure = "preservation_boundary_failure";
+  } else if (alignment.status === "underdeclared") {
+    measurementClosure = "underdeclared";
   } else {
     measurementClosure = "frontier_preserved";
   }
@@ -523,10 +537,39 @@ export function classifyPacketStatus({
   const plasmaStatus = evidenceToPacketStatus(plasmaEvidence, hasPlasma);
   const magStatus = evidenceToPacketStatus(magEvidence, hasMag);
   const kpStatus = evidenceToPacketStatus(kpEvidence, hasKp);
+  const alignmentClosure: PacketStatus =
+    alignment.status === "packet_resolved"
+      ? "resolved"
+      : alignment.status === "preservation_boundary_failure"
+        ? "preservation_boundary_failure"
+        : alignment.status === "unresolved_carrier_alignment"
+          ? "unresolved_carrier_alignment"
+          : alignment.status === "underdeclared"
+            ? "underdeclared"
+            : "frontier_preserved";
+  const alignmentEvidence: EvidenceStatus =
+    alignment.status === "packet_resolved" ||
+    alignment.status === "earth_response_candidate" ||
+    alignment.status === "carrier_signature_candidate" ||
+    alignment.status === "source_resolved_only"
+      ? "live_parsed"
+      : "unavailable";
 
   if (measurementClosure === "resolved") {
     statusReasons.push(
-      "packet closure resolved: selected event, rendered solar image witness, L1 plasma, L1 magnetometer, Kp marker, and carrier-window alignment are present."
+      "packet closure resolved: selected event, rendered solar image witness, L1 plasma, L1 magnetometer, Kp marker, and event-carrier signature alignment are present."
+    );
+  } else if (
+    measurementClosure === "frontier_preserved" &&
+    selectedEvent &&
+    hasImageUrl &&
+    imageRendered &&
+    hasPlasma &&
+    hasMag &&
+    hasKp
+  ) {
+    statusReasons.push(
+      "Resolved requires live witnesses plus carrier-signature and Earth-response features. Source data existing inside a broad window is only frontier-preserved."
     );
   } else if (statusReasons.length === 0) {
     statusReasons.push(
@@ -542,6 +585,7 @@ export function classifyPacketStatus({
     preservationBoundary: TCT_BOUNDARY,
     measurementClosure,
     representationSurfaceStatus,
+    alignment,
     statusReasons,
     witnessRoles: [
       witnessRole(
@@ -588,9 +632,9 @@ export function classifyPacketStatus({
         "Γ_C dashboard alignment/control relation",
         "dashboard",
         "live",
-        alignmentPassed ? "live_parsed" : "unavailable",
+        alignmentEvidence,
         "control_relation",
-        alignmentPassed ? "frontier_preserved" : "unresolved_carrier_alignment"
+        alignmentClosure
       ),
       witnessRole(
         "Rem_r display-only metadata",

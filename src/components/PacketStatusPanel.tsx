@@ -1,4 +1,5 @@
 import type { EvidenceStatus, RenderStatus, SourceStatus } from "../data/types";
+import type { AlignmentStatus } from "../tct/alignment";
 import type { TctPacketStatus } from "../tct/packetTypes";
 
 export interface SourceDiagnostics {
@@ -28,6 +29,8 @@ export interface SourceDiagnostics {
   magStatus: SourceStatus;
   kpStatus: SourceStatus;
   selectedEventId: string | null;
+  alignmentStatus: AlignmentStatus;
+  alignmentScore: number;
   alignmentPassed: boolean;
   carrierWindowStart: string | null;
   carrierWindowEnd: string | null;
@@ -83,6 +86,8 @@ function diagnosticRows(diagnostics: SourceDiagnostics) {
     ["SWPC mag status", diagnostics.magStatus],
     ["Kp status", diagnostics.kpStatus],
     ["selected event id", diagnostics.selectedEventId ?? "not selected"],
+    ["alignment status", diagnostics.alignmentStatus],
+    ["alignment score", String(diagnostics.alignmentScore)],
     ["alignment passed", String(diagnostics.alignmentPassed)],
     ["carrier window start", diagnostics.carrierWindowStart ?? "unavailable"],
     ["carrier window end", diagnostics.carrierWindowEnd ?? "unavailable"]
@@ -159,7 +164,7 @@ export function PacketStatusPanel({ packet, diagnostics }: PacketStatusPanelProp
       <div className="packet-help">
         <strong>Why do witnesses say frontier_preserved?</strong>
         <p>
-          The source witness is present, but the selected solar-to-Earth packet is not closure-sufficient yet. Resolved requires a selected event X, live witness surfaces, no fallback substitution, and carrier-window alignment.
+          The source witness is present, but the selected solar-to-Earth packet is not closure-sufficient yet. Resolved requires live witnesses plus carrier-signature and Earth-response features. Source data existing inside a broad window is only frontier-preserved.
         </p>
       </div>
 

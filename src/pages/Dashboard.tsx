@@ -24,8 +24,9 @@ import { MagnetometerChart } from "../components/MagnetometerChart";
 import { PacketStatusPanel } from "../components/PacketStatusPanel";
 import { SolarImagePanel } from "../components/SolarImagePanel";
 import { SolarWindChart } from "../components/SolarWindChart";
+import { AlignmentPanel } from "../components/AlignmentPanel";
 import { classifyPacketStatus } from "../tct/classifyPacketStatus";
-import { carrierWindowForEvent, hasCarrierAlignment } from "../tct/alignment";
+import { evaluateEventCarrierAlignment } from "../tct/alignment";
 import { parseUtcTime } from "../utils/dateRange";
 
 type StatusMap = Partial<Record<WitnessSource, SourceStatus>>;
@@ -274,16 +275,6 @@ export function Dashboard() {
     [data.events, selectedEventId]
   );
 
-  const carrierWindow = useMemo(
-    () => carrierWindowForEvent(selectedEvent),
-    [selectedEvent]
-  );
-
-  const alignmentPassed = useMemo(
-    () => hasCarrierAlignment(selectedEvent, data.plasma, data.mag),
-    [data.mag, data.plasma, selectedEvent]
-  );
-
   const witnessEvidence = useMemo(
     () => [
       solarEvidenceFromState(data.solarImage, solarImageRenderWitness),
@@ -323,6 +314,44 @@ export function Dashboard() {
     [data, solarImageRenderWitness]
   );
 
+  const alignment = useMemo(
+    () =>
+      evaluateEventCarrierAlignment({
+        selectedEvent,
+        plasma: data.plasma,
+        mag: data.mag,
+        kp: data.kp,
+        solarImageEvidence: witnessEvidence.find(
+          (entry) => entry.sourceKey === "HELIOVIEWER"
+        ),
+        donkiEvidence: witnessEvidence.find(
+          (entry) => entry.sourceKey === "NASA_DONKI"
+        ),
+        plasmaEvidence: witnessEvidence.find(
+          (entry) => entry.sourceKey === "NOAA_SWPC_SOLAR_WIND_PLASMA"
+        ),
+        magEvidence: witnessEvidence.find(
+          (entry) => entry.sourceKey === "NOAA_SWPC_SOLAR_WIND_MAG"
+        ),
+        kpEvidence: witnessEvidence.find(
+          (entry) => entry.sourceKey === "NOAA_SWPC_KP"
+        ),
+        eventCandidates: data.events,
+        selectedEventIsExplicit
+      }),
+    [
+      data.events,
+      data.kp,
+      data.mag,
+      data.plasma,
+      selectedEvent,
+      selectedEventIsExplicit,
+      witnessEvidence
+    ]
+  );
+
+  const carrierWindow = alignment.carrierWindow;
+
   const packet = useMemo(
     () =>
       classifyPacketStatus({
@@ -337,9 +366,17 @@ export function Dashboard() {
         selectedEventIsExplicit,
         solarImageRenderWitness,
         witnessEvidence,
+        alignment,
         representationSurfaceResolved: true
       }),
-    [data, selectedEvent, selectedEventIsExplicit, solarImageRenderWitness, witnessEvidence]
+    [
+      alignment,
+      data,
+      selectedEvent,
+      selectedEventIsExplicit,
+      solarImageRenderWitness,
+      witnessEvidence
+    ]
   );
 
   const diagnostics = useMemo(
@@ -379,13 +416,15 @@ export function Dashboard() {
         magStatus: data.status.NOAA_SWPC_SOLAR_WIND_MAG ?? "unavailable",
         kpStatus: data.status.NOAA_SWPC_KP ?? "unavailable",
         selectedEventId,
-        alignmentPassed,
-        carrierWindowStart: carrierWindow?.start.toISOString() ?? null,
-        carrierWindowEnd: carrierWindow?.end.toISOString() ?? null
+        alignmentStatus: alignment.status,
+        alignmentScore: alignment.alignmentScore,
+        alignmentPassed: alignment.alignmentPassed,
+        carrierWindowStart: carrierWindow?.start ?? null,
+        carrierWindowEnd: carrierWindow?.end ?? null
       };
     },
     [
-      alignmentPassed,
+      alignment,
       carrierWindow,
       data.solarImage,
       data.status,
@@ -426,16 +465,26 @@ export function Dashboard() {
             <PacketStatusPanel packet={packet} diagnostics={diagnostics} />
           </div>
 
+          <div className="dashboard-grid dashboard-grid--alignment">
+            <AlignmentPanel alignment={alignment} />
+          </div>
+
           <div className="dashboard-grid dashboard-grid--bottom">
             <SolarWindChart
               points={data.plasma}
               status={data.status.NOAA_SWPC_SOLAR_WIND_PLASMA ?? "unavailable"}
+              carrierWindow={carrierWindow}
             />
             <MagnetometerChart
               points={data.mag}
               status={data.status.NOAA_SWPC_SOLAR_WIND_MAG ?? "unavailable"}
+              carrierWindow={carrierWindow}
             />
-            <KpPanel points={data.kp} status={data.status.NOAA_SWPC_KP ?? "unavailable"} />
+            <KpPanel
+              points={data.kp}
+              status={data.status.NOAA_SWPC_KP ?? "unavailable"}
+              carrierWindow={carrierWindow}
+            />
           </div>
         </>
       )}

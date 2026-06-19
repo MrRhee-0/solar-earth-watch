@@ -108,6 +108,11 @@ button:disabled {
   margin-top: 16px;
 }
 
+.dashboard-grid--alignment {
+  grid-template-columns: 1fr;
+  margin-top: 16px;
+}
+
 .panel {
   min-width: 0;
   border: 1px solid rgba(130, 162, 196, 0.22);
@@ -206,6 +211,9 @@ button:disabled {
 .source-badge--rendered,
 .source-badge--live_rendered,
 .source-badge--live_parsed,
+.source-badge--strong,
+.source-badge--present,
+.source-badge--packet_resolved,
 .packet-status--resolved {
   border-color: rgba(52, 211, 153, 0.62);
   background: rgba(6, 78, 59, 0.48);
@@ -217,6 +225,10 @@ button:disabled {
 .source-badge--not_attempted,
 .source-badge--cached_snapshot_fallback,
 .source-badge--fixture_fallback,
+.source-badge--weak,
+.source-badge--source_resolved_only,
+.source-badge--carrier_signature_candidate,
+.source-badge--earth_response_candidate,
 .packet-status--fixture_fallback_active,
 .packet-status--frontier_preserved {
   border-color: rgba(250, 204, 21, 0.58);
@@ -227,6 +239,10 @@ button:disabled {
 .source-badge--unavailable,
 .source-badge--missing_url,
 .source-badge--empty_live,
+.source-badge--missing,
+.source-badge--not_evaluated,
+.source-badge--underdeclared,
+.source-badge--unresolved_carrier_alignment,
 .packet-status--unavailable_witness,
 .packet-status--underdeclared,
 .packet-status--unresolved_carrier_alignment {
@@ -237,6 +253,7 @@ button:disabled {
 
 .source-badge--error,
 .source-badge--render_error,
+.source-badge--preservation_boundary_failure,
 .packet-status--source_fetch_failure,
 .packet-status--preservation_boundary_failure {
   border-color: rgba(248, 113, 113, 0.58);
@@ -516,6 +533,13 @@ button:disabled {
   height: 310px;
 }
 
+.chart-window-note {
+  margin: 10px 0 0;
+  color: #bfdbfe;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+}
+
 .kp-latest {
   display: grid;
   gap: 4px;
@@ -542,6 +566,29 @@ button:disabled {
   margin-top: 12px;
 }
 
+.kp-window-marker {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 12px;
+  border: 1px solid rgba(96, 165, 250, 0.38);
+  border-radius: 8px;
+  background: rgba(30, 58, 138, 0.22);
+  color: #d7e3f3;
+  padding: 10px;
+}
+
+.kp-window-marker span {
+  color: #bfdbfe;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.kp-window-marker strong {
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
 .kp-tile {
   min-height: 66px;
   border: 1px solid #273449;
@@ -564,6 +611,110 @@ button:disabled {
 .packet-panel {
   max-height: 720px;
   overflow: auto;
+}
+
+.alignment-panel {
+  overflow: auto;
+}
+
+.alignment-summary,
+.alignment-window,
+.alignment-reasons {
+  display: grid;
+  gap: 10px;
+}
+
+.alignment-summary {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.alignment-summary div,
+.alignment-window,
+.alignment-reasons > div {
+  border: 1px solid #273449;
+  border-radius: 8px;
+  background: #101a2b;
+  padding: 10px;
+}
+
+.alignment-summary span,
+.alignment-window span,
+.alignment-reasons span {
+  display: block;
+  color: #8fb6d9;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.alignment-summary strong,
+.alignment-window strong {
+  display: block;
+  margin-top: 5px;
+  color: #f8fafc;
+  font-size: 0.88rem;
+  overflow-wrap: anywhere;
+}
+
+.alignment-window {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 12px;
+}
+
+.alignment-window p {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: #aebfd3;
+  font-size: 0.82rem;
+}
+
+.alignment-window--missing {
+  grid-template-columns: 1fr;
+}
+
+.alignment-reasons {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 12px;
+}
+
+.alignment-reasons ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  color: #e2e8f0;
+  font-size: 0.82rem;
+}
+
+.alignment-feature-table {
+  display: grid;
+  gap: 1px;
+  margin-top: 14px;
+  overflow: auto;
+  border: 1px solid #273449;
+  border-radius: 8px;
+}
+
+.alignment-feature-table__head,
+.alignment-feature-table__row {
+  display: grid;
+  grid-template-columns: minmax(170px, 1fr) minmax(82px, 0.45fr) minmax(72px, 0.35fr) minmax(118px, 0.55fr) minmax(300px, 1.6fr);
+  gap: 10px;
+  min-width: 880px;
+  padding: 10px;
+}
+
+.alignment-feature-table__head {
+  background: #17243a;
+  color: #aebfd3;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.alignment-feature-table__row {
+  align-items: center;
+  background: #101a2b;
+  color: #e2e8f0;
+  font-size: 0.82rem;
 }
 
 .packet-block {
@@ -737,6 +888,12 @@ button:disabled {
   }
 
   .kp-sequence {
+    grid-template-columns: 1fr;
+  }
+
+  .alignment-summary,
+  .alignment-window,
+  .alignment-reasons {
     grid-template-columns: 1fr;
   }
 }

@@ -1,5 +1,6 @@
 import type { KpPoint, SourceStatus } from "../data/types";
-import { shortUtc } from "../utils/dateRange";
+import type { CarrierWindow } from "../tct/alignment";
+import { formatUtcTimestamp, parseUtcTime, shortUtc } from "../utils/dateRange";
 import { compactNumber } from "../utils/number";
 import { EmptyState } from "./EmptyState";
 import { WitnessSourceBadge } from "./WitnessSourceBadge";
@@ -7,11 +8,29 @@ import { WitnessSourceBadge } from "./WitnessSourceBadge";
 interface KpPanelProps {
   points: KpPoint[];
   status: SourceStatus;
+  carrierWindow?: CarrierWindow | null;
 }
 
-export function KpPanel({ points, status }: KpPanelProps) {
+function responseWindowLabel(carrierWindow?: CarrierWindow | null) {
+  if (!carrierWindow) {
+    return null;
+  }
+
+  const endMs = parseUtcTime(carrierWindow.end);
+  if (!Number.isFinite(endMs)) {
+    return null;
+  }
+
+  return {
+    start: formatUtcTimestamp(carrierWindow.start),
+    end: formatUtcTimestamp(new Date(endMs + 24 * 60 * 60 * 1000).toISOString())
+  };
+}
+
+export function KpPanel({ points, status, carrierWindow }: KpPanelProps) {
   const recent = points.slice(-8);
   const latest = recent.at(-1) ?? null;
+  const responseWindow = responseWindowLabel(carrierWindow);
 
   return (
     <section className="panel kp-panel">
@@ -30,6 +49,14 @@ export function KpPanel({ points, status }: KpPanelProps) {
         />
       ) : (
         <>
+          {responseWindow ? (
+            <div className="kp-window-marker">
+              <span>selected response window</span>
+              <strong>
+                {responseWindow.start} to {responseWindow.end}
+              </strong>
+            </div>
+          ) : null}
           <div className="kp-latest">
             <span>latest Kp</span>
             <strong>{compactNumber(latest.kp, 2)}</strong>
