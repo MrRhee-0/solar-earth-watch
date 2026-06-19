@@ -7,7 +7,7 @@ import type { SolarImageWitness, SourceResult } from "../types";
 import { fetchJson } from "../../utils/fetchJson";
 
 const HELIOVIEWER_CLOSEST_IMAGE_URL =
-  "https://api.helioviewer.org/v2/getClosestImage/";
+  "/proxy/helioviewer/getClosestImage/";
 
 function targetImageTime(): string {
   const fifteenMinutesMs = 15 * 60 * 1000;

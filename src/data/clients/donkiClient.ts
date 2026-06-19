@@ -4,7 +4,7 @@ import type { EventType, EventWitness, SourceResult } from "../types";
 import { fetchJson } from "../../utils/fetchJson";
 import { lastUtcDays } from "../../utils/dateRange";
 
-const DONKI_BASE_URL = "https://kauai.ccmc.gsfc.nasa.gov/DONKI/WS/get";
+const DONKI_BASE_URL = "/proxy/donki";
 const REQUIRED_EVENT_TYPES: EventType[] = ["FLR", "CME", "GST", "HSS", "IPS"];
 const OPTIONAL_EVENT_TYPES: EventType[] = ["SEP"];
 
